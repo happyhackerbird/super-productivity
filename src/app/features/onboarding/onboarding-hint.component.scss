@@ -28,7 +28,18 @@
 }
 
 .hint-message {
+  display: flex;
+  align-items: center;
+  gap: var(--s-half);
   line-height: 1.35;
+
+  mat-icon {
+    flex-shrink: 0;
+    width: 18px;
+    height: 18px;
+    font-size: 18px;
+    color: var(--palette-primary-500);
+  }
 }
 
 .hint-link {

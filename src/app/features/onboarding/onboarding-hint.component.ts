@@ -14,6 +14,7 @@ import {
   viewChild,
 } from '@angular/core';
 import { MatButton } from '@angular/material/button';
+import { MatIcon } from '@angular/material/icon';
 import { TranslatePipe, TranslateService } from '@ngx-translate/core';
 import { OnboardingHintService, OnboardingStep } from './onboarding-hint.service';
 import { isTouchActive } from '../../util/input-intent';
@@ -28,10 +29,19 @@ const POSITION_RETRY_DELAY_MS = 120;
 /** Keeps the offer to about two lines in the 260px chip */
 const MAX_TITLE_LENGTH = 32;
 
+const UNDONE_TASK_ROW_SELECTOR = 'task-list .task-list-inner > task:not(.isDone)';
+
+const swipeTargetSelector = (swipeTargetTaskId: string | null): string =>
+  swipeTargetTaskId
+    ? `task[data-task-id="${CSS.escape(swipeTargetTaskId)}"]`
+    : UNDONE_TASK_ROW_SELECTOR;
+
 interface StepConfig {
-  selector: (isMobile: boolean) => string;
+  selector: (isMobile: boolean, swipeTargetTaskId: string | null) => string;
   message: string;
   touchMessage?: string;
+  /** Gesture icon shown before the message */
+  icon?: string;
   showShortcut: boolean;
   /** Pulse the target element to draw attention to it */
   isPulse: boolean;
@@ -59,6 +69,27 @@ const STEP_CONFIGS = new Map<OnboardingStep, StepConfig>([
       isPulse: true,
     },
   ],
+  // Phones only. Anchored to the task row; task.component itself is untouched.
+  [
+    'task-swipe-left',
+    {
+      selector: (_isMobile, swipeTargetTaskId) => swipeTargetSelector(swipeTargetTaskId),
+      message: T.ONBOARDING.HINTS.TASK_SWIPE_LEFT_TOUCH,
+      icon: 'swipe_left',
+      showShortcut: false,
+      isPulse: false,
+    },
+  ],
+  [
+    'task-swipe-right',
+    {
+      selector: (_isMobile, swipeTargetTaskId) => swipeTargetSelector(swipeTargetTaskId),
+      message: T.ONBOARDING.HINTS.TASK_SWIPE_RIGHT_TOUCH,
+      icon: 'swipe_right',
+      showShortcut: false,
+      isPulse: false,
+    },
+  ],
 ]);
 
 interface HintPosition {
@@ -71,7 +102,7 @@ interface HintPosition {
 @Component({
   selector: 'onboarding-hint',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [TranslatePipe, MatButton],
+  imports: [TranslatePipe, MatButton, MatIcon],
   templateUrl: './onboarding-hint.component.html',
   styleUrl: './onboarding-hint.component.scss',
 })
@@ -80,6 +111,7 @@ export class OnboardingHintComponent {
   onboardingHintService = inject(OnboardingHintService);
   hintPosition = signal<HintPosition | null>(null);
   hintMessage = signal<string>('');
+  hintIcon = signal<string | null>(null);
   readonly hintMessageParams = computed(() => {
     const step = this.onboardingHintService.currentStep();
     return step ? this._getMessageParams(step) : {};
@@ -250,7 +282,9 @@ export class OnboardingHintComponent {
     this._updateMessage(config, step);
 
     const isMobile = isTouchActive() && this._layoutService.isShowMobileBottomNav();
-    const targetEl = document.querySelector<HTMLElement>(config.selector(isMobile));
+    const targetEl = document.querySelector<HTMLElement>(
+      config.selector(isMobile, this.onboardingHintService.swipeTargetTaskId()),
+    );
     if (!targetEl) {
       return false;
     }
@@ -285,6 +319,7 @@ export class OnboardingHintComponent {
     this.hintMessage.set(
       isTouchActive() ? (config.touchMessage ?? config.message) : config.message,
     );
+    this.hintIcon.set(config.icon ?? null);
     if (!isTouchActive() && config.showShortcut) {
       const shortcut = this._globalConfigService.cfg()?.keyboard?.addNewTask;
       this.shortcutHint.set(shortcut || null);

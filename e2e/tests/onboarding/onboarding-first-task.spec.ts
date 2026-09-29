@@ -200,9 +200,18 @@ test.describe('First-run onboarding', () => {
         'Tap play to track time on “My first mobile task”.',
       );
       await page.locator('.tour-playBtn').tap();
-      await expect(
-        page.locator('task').filter({ hasText: 'My first mobile task' }).first(),
-      ).toHaveClass(/isCurrent/);
+      const task = page
+        .locator('task')
+        .filter({ hasText: 'My first mobile task' })
+        .first();
+      await expect(task).toHaveClass(/isCurrent/);
+
+      // Phones then learn the task gestures, pointed at the task row.
+      await expect(hint).toContainText('Swipe task left for more actions');
+      await expect.poll(() => expectHintBelow(page, 'task').then(() => true)).toBe(true);
+
+      // Marking the task done (swipe right or checkbox) completes guidance.
+      await task.locator('done-toggle').tap();
       await expect(hint).toHaveCount(0);
       assertNoRuntimeBrowserErrors(runtimeErrors, 'mobile onboarding');
       await page.close();

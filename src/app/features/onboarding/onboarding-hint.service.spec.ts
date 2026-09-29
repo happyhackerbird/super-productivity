@@ -14,6 +14,7 @@ import { ProjectService } from '../project/project.service';
 import { selectTaskFeatureState } from '../tasks/store/task.selectors';
 import { Task, TaskState } from '../tasks/task.model';
 import { TaskService } from '../tasks/task.service';
+import { TaskFocusService } from '../tasks/task-focus.service';
 import { WorkContextType } from '../work-context/work-context.model';
 import { WorkContextService } from '../work-context/work-context.service';
 import { MatDialog } from '@angular/material/dialog';
@@ -36,6 +37,8 @@ describe('OnboardingHintService', () => {
   let store: MockStore;
   let isShowAddTaskBar: WritableSignal<boolean>;
   let currentTaskId: WritableSignal<string | null>;
+  let selectedTaskId: WritableSignal<string | null>;
+  let isTaskContextMenuOpen: WritableSignal<boolean>;
   let appFeatures: WritableSignal<AppFeaturesConfig>;
   let syncEnabled: WritableSignal<boolean>;
   let projects$: BehaviorSubject<{ id: string }[]>;
@@ -46,6 +49,7 @@ describe('OnboardingHintService', () => {
   };
   let taskService: {
     currentTaskId: WritableSignal<string | null>;
+    selectedTaskId: WritableSignal<string | null>;
   };
   let snackService: jasmine.SpyObj<SnackService>;
   let localActions$: Subject<Action>;
@@ -100,6 +104,8 @@ describe('OnboardingHintService', () => {
 
     isShowAddTaskBar = signal(false);
     currentTaskId = signal(null);
+    selectedTaskId = signal(null);
+    isTaskContextMenuOpen = signal(false);
     appFeatures = signal({ ...DEFAULT_GLOBAL_CONFIG.appFeatures });
     syncEnabled = signal(false);
     projects$ = new BehaviorSubject<{ id: string }[]>([{ id: 'INBOX_PROJECT' }]);
@@ -111,6 +117,7 @@ describe('OnboardingHintService', () => {
     };
     taskService = {
       currentTaskId,
+      selectedTaskId,
     };
     snackService = jasmine.createSpyObj<SnackService>('SnackService', ['open']);
     localActions$ = new Subject<Action>();
@@ -141,6 +148,7 @@ describe('OnboardingHintService', () => {
         { provide: LOCAL_ACTIONS, useValue: localActions$ },
         { provide: WorkContextService, useValue: { mainListTaskIds$ } },
         { provide: MatDialog, useValue: matDialog },
+        { provide: TaskFocusService, useValue: { isTaskContextMenuOpen } },
       ],
     });
     store = TestBed.inject(MockStore);
@@ -387,5 +395,75 @@ describe('OnboardingHintService', () => {
     service.skip();
     expect(OnboardingHintService.isOnboardingInProgress()).toBeFalse();
     expect(service.currentStep()).toBeNull();
+  });
+
+  describe('on phones', () => {
+    const createPhoneService = (): OnboardingHintService => {
+      const service = createService();
+      // Touch input cannot be simulated in the unit test browser.
+      spyOn(service, 'isSwipeLayout').and.returnValue(true);
+      return service;
+    };
+
+    const startTracking = (): void => {
+      currentTaskId.set('task-1');
+      TestBed.tick();
+    };
+
+    it('introduces swipe left after the tracking tip, then swipe right', () => {
+      const service = createPhoneService();
+      addFirstTask(service);
+      startTracking();
+      expect(service.currentStep()).toBe('task-swipe-left');
+      expect(service.swipeTargetTaskId()).toBe('task-1');
+      expect(localStorage.getItem(LS.ONBOARDING_HINTS_DONE)).toBeNull();
+
+      // Swiping left opens the task menu: hide while open, move on once closed.
+      isTaskContextMenuOpen.set(true);
+      TestBed.tick();
+      expect(service.currentStep()).toBeNull();
+      isTaskContextMenuOpen.set(false);
+      TestBed.tick();
+      expect(service.currentStep()).toBe('task-swipe-right');
+    });
+
+    it('also introduces swipes after choosing a to-do list', () => {
+      const service = createPhoneService();
+      addFirstTask(service);
+      service.simplifyToTodoList();
+      expect(service.currentStep()).toBe('task-swipe-left');
+    });
+
+    it('ends guidance once a task is marked done', () => {
+      const service = createPhoneService();
+      addFirstTask(service);
+      startTracking();
+      localActions$.next(
+        TaskSharedActions.updateTask({
+          task: { id: 'task-1', changes: { isDone: true } },
+        }),
+      );
+      TestBed.tick();
+      expect(service.currentStep()).toBeNull();
+      expect(localStorage.getItem(LS.ONBOARDING_HINTS_DONE)).toBe('true');
+    });
+
+    it('hides swipe hints while a task detail panel is open', () => {
+      const service = createPhoneService();
+      addFirstTask(service);
+      startTracking();
+      selectedTaskId.set('task-1');
+      expect(service.currentStep()).toBeNull();
+      selectedTaskId.set(null);
+      expect(service.currentStep()).toBe('task-swipe-left');
+    });
+
+    it('closing a tip ends all guidance, swipes included', () => {
+      const service = createPhoneService();
+      addFirstTask(service);
+      service.skip();
+      expect(service.currentStep()).toBeNull();
+      expect(localStorage.getItem(LS.ONBOARDING_HINTS_DONE)).toBe('true');
+    });
   });
 });

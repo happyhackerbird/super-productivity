@@ -18,7 +18,10 @@
       <div class="hint-text">
         @if (hintMessage()) {
           <div class="hint-message">
-            {{ hintMessage() | translate: hintMessageParams() }}
+            @if (hintIcon(); as icon) {
+              <mat-icon aria-hidden="true">{{ icon }}</mat-icon>
+            }
+            <span>{{ hintMessage() | translate: hintMessageParams() }}</span>
           </div>
         }
         @if (shortcutHint(); as shortcut) {

@@ -18,6 +18,7 @@ import { AppFeaturesConfig } from '../config/global-config.model';
 import { GlobalConfigService } from '../config/global-config.service';
 import { ProjectService } from '../project/project.service';
 import { TaskService } from '../tasks/task.service';
+import { TaskFocusService } from '../tasks/task-focus.service';
 import { selectTaskFeatureState } from '../tasks/store/task.selectors';
 import { findTaskToStart } from '../tasks/util/find-task-to-start';
 import { WorkContextService } from '../work-context/work-context.service';
@@ -26,9 +27,18 @@ import { SIMPLE_TODO_DISABLED_FEATURES } from './onboarding-presets.const';
 type DialogSyncCfgComponentType =
   typeof import('../../imex/sync/dialog-sync-cfg/dialog-sync-cfg.component').DialogSyncCfgComponent;
 
-export type OnboardingStep = 'create-task' | 'track-offer';
+export type OnboardingStep =
+  | 'create-task'
+  | 'track-offer'
+  | 'task-swipe-left'
+  | 'task-swipe-right';
 
-type OnboardingPhase = 'idle' | 'await-first-task' | 'track-offer';
+type OnboardingPhase =
+  | 'idle'
+  | 'await-first-task'
+  | 'track-offer'
+  | 'task-swipe-left'
+  | 'task-swipe-right';
 
 /** Undo for "I only need a to-do list" must stay reachable (WCAG 2.2.1). */
 const SIMPLIFIED_SNACK_DURATION_MS = 10000;
@@ -47,6 +57,9 @@ const RETURNING_USER_MIN_PROJECTS = 3;
  *    features off (with undo). Ignoring the offer changes nothing: feature
  *    settings are only written on an explicit choice, because appFeatures sync
  *    to the user's other devices.
+ * 3. Phones only: on the task row, "swipe left for more actions" (advances once
+ *    the task menu was opened and closed), then "swipe right to mark it as done"
+ *    (ends once a task is marked done).
  *
  * No step advances on a timer. Reloading after the first task ends guidance.
  */
@@ -55,6 +68,7 @@ export class OnboardingHintService {
   private _layoutService = inject(LayoutService);
   private _dataInitStateService = inject(DataInitStateService);
   private _taskService = inject(TaskService);
+  private _taskFocusService = inject(TaskFocusService);
   private _projectService = inject(ProjectService);
   private _globalConfigService = inject(GlobalConfigService);
   private _snackService = inject(SnackService);
@@ -64,9 +78,11 @@ export class OnboardingHintService {
 
   private _phase = signal<OnboardingPhase>('idle');
   private _isSyncDialogOpen = signal(false);
+  private _wasTaskMenuOpened = false;
   private _isFirstTaskComposerAutoCloseUsed = false;
   private _startSub: Subscription | null = null;
   private _taskAddSub: Subscription | null = null;
+  private _taskDoneSub: Subscription | null = null;
   private _taskState = this._store.selectSignal(selectTaskFeatureState);
   private _taskEntities = computed(() => this._taskState().entities);
   private _mainListTaskIds = toSignal(inject(WorkContextService).mainListTaskIds$, {
@@ -86,11 +102,23 @@ export class OnboardingHintService {
     return id ? (this._taskEntities()[id] ?? null) : null;
   });
 
-  /** Hints hide while the composer or the sync dialog is open. */
+  /** Row the swipe hints point at: the first task while undone, else any undone task. */
+  readonly swipeTargetTaskId = computed(() => {
+    const task = this.offerTask();
+    return task && !task.isDone ? task.id : null;
+  });
+
+  /** Hints hide while the composer, the sync dialog, a task panel or task menu is open. */
   readonly currentStep = computed<OnboardingStep | null>(() => {
     const phase = this._phase();
     if (this._layoutService.isShowAddTaskBar() || this._isSyncDialogOpen()) {
       return null;
+    }
+    if (phase === 'task-swipe-left' || phase === 'task-swipe-right') {
+      const isTaskUiOpen =
+        this._taskFocusService.isTaskContextMenuOpen() ||
+        this._taskService.selectedTaskId() !== null;
+      return isTaskUiOpen ? null : phase;
     }
     if (phase === 'await-first-task') {
       return 'create-task';
@@ -122,10 +150,23 @@ export class OnboardingHintService {
     });
 
     // Tracking started (header play button, task play button, shortcut, ...):
-    // the pause button and the time on the task confirm it, so guidance ends.
+    // the pause button and the time on the task confirm it, so move on.
     effect(() => {
       if (this._phase() === 'track-offer' && this._taskService.currentTaskId() !== null) {
-        untracked(() => this._markDone());
+        untracked(() => this._advancePastTrackOffer());
+      }
+    });
+
+    // "Swipe left" is learned once the task menu was opened and closed again.
+    effect(() => {
+      const isMenuOpen = this._taskFocusService.isTaskContextMenuOpen();
+      if (this._phase() !== 'task-swipe-left') {
+        return;
+      }
+      if (isMenuOpen) {
+        this._wasTaskMenuOpened = true;
+      } else if (this._wasTaskMenuOpened) {
+        this._phase.set('task-swipe-right');
       }
     });
 
@@ -164,6 +205,19 @@ export class OnboardingHintService {
         filter(({ isExampleTask, task }) => !isExampleTask && !task.repeatCfgId),
       )
       .subscribe(({ task }) => this._onFirstTaskCandidate(task.id));
+
+    // Marking a task done (swipe right, checkbox, ...) completes the swipe hints.
+    this._taskDoneSub = this._localActions$
+      .pipe(
+        ofType(TaskSharedActions.updateTask),
+        filter(({ task }) => task.changes.isDone === true),
+      )
+      .subscribe(() => {
+        const phase = this._phase();
+        if (phase === 'task-swipe-left' || phase === 'task-swipe-right') {
+          this._markDone();
+        }
+      });
   }
 
   static isOnboardingInProgress(): boolean {
@@ -180,13 +234,14 @@ export class OnboardingHintService {
   shouldAutoCloseFirstTaskComposer(taskId: string): boolean {
     if (
       this._isFirstTaskComposerAutoCloseUsed ||
-      this._phase() !== 'track-offer' ||
+      this._phase() === 'idle' ||
+      this._phase() === 'await-first-task' ||
       this.offerTaskId() !== taskId
     ) {
       return false;
     }
     this._isFirstTaskComposerAutoCloseUsed = true;
-    return isTouchActive() && this._layoutService.isShowMobileBottomNav();
+    return this.isSwipeLayout();
   }
 
   simplifyToTodoList(): void {
@@ -201,8 +256,8 @@ export class OnboardingHintService {
       ]),
     ) as Partial<AppFeaturesConfig>;
 
-    // End guidance first: the hint is anchored to the play button being hidden.
-    this._markDone();
+    // Move on first: the hint is anchored to the play button being hidden.
+    this._advancePastTrackOffer();
     // Only switch features off; never re-enable something the user hid.
     this._globalConfigService.updateSection(
       'appFeatures',
@@ -248,11 +303,27 @@ export class OnboardingHintService {
 
     // Someone who turned tracking off before adding a task has already chosen.
     if (!this._globalConfigService.appFeatures().isTimeTrackingEnabled) {
-      this._markDone();
+      this.offerTaskId.set(taskId);
+      this._advancePastTrackOffer();
       return;
     }
     this.offerTaskId.set(taskId);
     this._phase.set('track-offer');
+  }
+
+  /** Touch input on the phone layout, where tasks are handled with swipes. */
+  isSwipeLayout(): boolean {
+    return isTouchActive() && this._layoutService.isShowMobileBottomNav();
+  }
+
+  /** Phones continue with the swipe gestures; elsewhere guidance is complete. */
+  private _advancePastTrackOffer(): void {
+    if (this.isSwipeLayout()) {
+      this._wasTaskMenuOpened = false;
+      this._phase.set('task-swipe-left');
+    } else {
+      this._markDone();
+    }
   }
 
   skip(): void {
@@ -266,6 +337,8 @@ export class OnboardingHintService {
     this._startSub = null;
     this._taskAddSub?.unsubscribe();
     this._taskAddSub = null;
+    this._taskDoneSub?.unsubscribe();
+    this._taskDoneSub = null;
     this.offerTaskId.set(null);
     this._phase.set('idle');
   }
