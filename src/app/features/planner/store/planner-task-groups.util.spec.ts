@@ -2,6 +2,7 @@ import {
   buildPlannerGroupValue,
   createPlannerGroupId,
   parsePlannerGroupValue,
+  partitionTasksByAnyPlannerGroup,
   partitionTasksByPlannerGroup,
 } from './planner-task-groups.util';
 import { TaskCopy } from '../../tasks/task.model';
@@ -109,6 +110,23 @@ describe('planner-task-groups.util', () => {
     it('should never return an empty group', () => {
       const r = partitionTasksByPlannerGroup([t('a', '2026-09-30:g1')], '2026-09-30');
       expect(r.taskGroups.every((g) => g.tasks.length > 0)).toBe(true);
+    });
+  });
+
+  describe('partitionTasksByAnyPlannerGroup', () => {
+    it('keeps groups from different days apart and ungrouped tasks in order', () => {
+      const r = partitionTasksByAnyPlannerGroup([
+        t('a'),
+        t('b', '2026-09-28:g1'),
+        t('c', 'bad'),
+        t('d', '2026-09-27:g1'),
+        t('e', '2026-09-28:g1'),
+      ]);
+      expect(r.ungroupedTasks.map((x) => x.id)).toEqual(['a', 'c']);
+      expect(r.taskGroups.map((g) => [g.id, g.tasks.map((x) => x.id)])).toEqual([
+        ['2026-09-27:g1', ['d']],
+        ['2026-09-28:g1', ['b', 'e']],
+      ]);
     });
   });
 });

@@ -92,7 +92,8 @@
   flex-grow: 1;
 }
 
-.normal-tasks-items > * {
+.normal-tasks-items > *,
+.task-group > * {
   margin-bottom: var(--s);
 }
 
@@ -164,4 +165,15 @@
   font-style: italic;
   line-height: var(--planner-item-height);
   height: 0;
+}
+
+// A group is framed in purple so it reads as one unit apart from the list.
+.task-group {
+  margin-top: var(--s2);
+  --planner-group-c: #8b5cf6;
+  padding: var(--s-half) var(--s-half) 0;
+  border: 1px solid color-mix(in srgb, var(--planner-group-c) 45%, transparent);
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--planner-group-c) 7%, transparent);
+  box-shadow: inset 3px 0 0 var(--planner-group-c);
 }

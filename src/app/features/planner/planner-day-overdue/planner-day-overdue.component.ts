@@ -17,6 +17,7 @@ import { OVERDUE_LIST_ID } from '../planner.model';
 import { TranslatePipe } from '@ngx-translate/core';
 import { dragDelayForTouch } from '../../../util/input-intent';
 import { LayoutService } from '../../../core-ui/layout/layout.service';
+import { partitionTasksByAnyPlannerGroup } from '../store/planner-task-groups.util';
 
 @Component({
   selector: 'planner-day-overdue',
@@ -43,6 +44,11 @@ export class PlannerDayOverdueComponent {
     if (!tasks) return 0;
     return tasks.reduce((acc, task) => acc + (task.timeEstimate || 0), 0);
   });
+
+  // Groups made on earlier days stay together here instead of merging.
+  partitioned = computed(() =>
+    partitionTasksByAnyPlannerGroup(this.overdueTasks() || []),
+  );
 
   OVERDUE_LIST_ID = OVERDUE_LIST_ID;
   protected readonly T = T;

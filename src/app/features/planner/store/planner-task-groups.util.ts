@@ -87,3 +87,34 @@ export const partitionTasksByPlannerGroup = (
       .map(([id, groupTasks]) => ({ id, tasks: groupTasks })),
   };
 };
+
+/**
+ * Splits tasks from several days (the overdue list) by their stored group,
+ * whatever day the group was made on. Groups are ordered by the full stored
+ * value, so older days come first and a day's groups keep creation order.
+ */
+export const partitionTasksByAnyPlannerGroup = (
+  tasks: TaskCopy[],
+): { ungroupedTasks: TaskCopy[]; taskGroups: PlannerTaskGroup[] } => {
+  const ungroupedTasks: TaskCopy[] = [];
+  const groupMap = new Map<string, TaskCopy[]>();
+  for (const task of tasks) {
+    const key = parsePlannerGroupValue(task.plannerGroup) ? task.plannerGroup! : null;
+    if (key === null) {
+      ungroupedTasks.push(task);
+      continue;
+    }
+    const group = groupMap.get(key);
+    if (group) {
+      group.push(task);
+    } else {
+      groupMap.set(key, [task]);
+    }
+  }
+  return {
+    ungroupedTasks,
+    taskGroups: Array.from(groupMap.entries())
+      .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
+      .map(([id, groupTasks]) => ({ id, tasks: groupTasks })),
+  };
+};

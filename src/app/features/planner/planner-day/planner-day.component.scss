@@ -139,11 +139,21 @@
   flex-grow: 1;
 }
 
-// Groups are set apart from the list above by a gap only: no label, no box.
+// Groups sit below the list with a gap and a purple frame (see .task-group).
 .task-group,
 .new-task-group-drop-zone {
   min-height: var(--planner-item-height);
   margin-top: var(--s2);
+}
+
+// A group is framed in purple so it reads as one unit apart from the list.
+.task-group {
+  --planner-group-c: #8b5cf6;
+  padding: var(--s-half) var(--s-half) 0;
+  border: 1px solid color-mix(in srgb, var(--planner-group-c) 45%, transparent);
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--planner-group-c) 7%, transparent);
+  box-shadow: inset 3px 0 0 var(--planner-group-c);
 }
 
 // Keeps its size at all times so the drop area does not move when a drag

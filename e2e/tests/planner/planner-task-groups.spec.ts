@@ -6,6 +6,7 @@ const UNGROUPED_LIST = '.normal-tasks-items';
 const TASK_GROUP = '.task-group';
 const NEW_GROUP_DROP_ZONE = '.new-task-group-drop-zone';
 const SCHEDULE_DIALOG = 'dialog-schedule-task';
+const ONE_DAY_MS = 24 * 60 * 60 * 1000;
 
 type Point = { x: number; y: number };
 
@@ -123,6 +124,30 @@ test.describe('Planner task groups', () => {
     await expect(today.locator(TASK_GROUP)).toHaveCount(0);
     await expect(today.locator(`${UNGROUPED_LIST} planner-task`)).toHaveCount(3);
     await expect(page.locator(SCHEDULE_DIALOG)).toHaveCount(0);
+  });
+
+  test('a group stays a group in the overdue list on a later day', async ({ page }) => {
+    await page.clock.install();
+    await page.reload();
+    await new PlannerPage(page).navigateToPlanner();
+    today = page.locator('planner-day').first();
+    await startGroupWith(page, 'Gamma');
+    await dragIntoGroup(page, 'Alpha');
+    await expect(today.locator(`${TASK_GROUP} planner-task`)).toHaveCount(2);
+
+    // give the operation log time to persist before moving to the next day
+    await page.waitForTimeout(1000);
+    await page.clock.setSystemTime(Date.now() + ONE_DAY_MS);
+    await page.reload();
+    await new PlannerPage(page).navigateToPlanner();
+
+    const overdue = page.locator('planner-day-overdue');
+    await expect(overdue.locator(TASK_GROUP)).toHaveCount(1);
+    await expect(overdue.locator(`${TASK_GROUP} planner-task`)).toHaveCount(2);
+    await expect(overdue.locator(`${UNGROUPED_LIST} planner-task`)).toHaveCount(1);
+    await expect(
+      overdue.locator(`${UNGROUPED_LIST} planner-task`).filter({ hasText: 'Beta' }),
+    ).toHaveCount(1);
   });
 
   test('grouping survives a reload', async ({ page }) => {

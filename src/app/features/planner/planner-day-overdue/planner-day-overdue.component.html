@@ -22,7 +22,7 @@
     [cdkDropListData]="OVERDUE_LIST_ID"
     [cdkDropListAutoScrollStep]="8"
   >
-    @for (task of overdueTasks(); track task.id) {
+    @for (task of partitioned().ungroupedTasks; track task.id) {
       <planner-task
         cdkDrag
         [cdkDragData]="task"
@@ -34,6 +34,30 @@
       ></planner-task>
     }
   </div>
+
+  @for (group of partitioned().taskGroups; track group.id) {
+    <div
+      class="task-group"
+      cdkDropList
+      [attr.data-task-group]="group.id"
+      [cdkDropListSortingDisabled]="true"
+      [cdkDropListEnterPredicate]="enterPredicate"
+      [cdkDropListData]="OVERDUE_LIST_ID"
+      [cdkDropListAutoScrollStep]="8"
+    >
+      @for (task of group.tasks; track task.id) {
+        <planner-task
+          cdkDrag
+          [cdkDragData]="task"
+          [cdkDragStartDelay]="dragDelayForTouch()"
+          [cdkDragLockAxis]="isXs() ? 'y' : ''"
+          [task]="task"
+          [day]=""
+          [focusable]="true"
+        ></planner-task>
+      }
+    </div>
+  }
 </div>
 
 @if (overdueDeadlineTasks()?.length) {
