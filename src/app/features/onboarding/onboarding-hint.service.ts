@@ -26,6 +26,17 @@ export type OnboardingStep =
 
 type OnboardingPhase = 'idle' | 'await-first-task' | OnboardingStep;
 
+const readExampleTaskIds = (): string[] => {
+  try {
+    const ids: unknown = JSON.parse(localStorage.getItem(LS.EXAMPLE_TASK_IDS) ?? '[]');
+    return Array.isArray(ids)
+      ? ids.filter((id): id is string => typeof id === 'string')
+      : [];
+  } catch {
+    return [];
+  }
+};
+
 /** More projects than the default ones means this is not a new user. */
 const RETURNING_USER_MIN_PROJECTS = 3;
 
@@ -229,17 +240,11 @@ export class OnboardingHintService {
 
   /** Point at the Inbox only while the seeded example tasks are still there. */
   private _advanceToExplore(): void {
-    const firstTaskId = this.firstTaskId();
-    const hasExampleTasksInInbox =
-      !!localStorage.getItem(LS.EXAMPLE_TASKS_CREATED) &&
-      Object.values(this._taskEntities()).some(
-        (task) =>
-          !!task &&
-          task.projectId === INBOX_PROJECT.id &&
-          task.id !== firstTaskId &&
-          !task.parentId &&
-          !task.isDone,
-      );
+    const entities = this._taskEntities();
+    const hasExampleTasksInInbox = readExampleTaskIds().some((id) => {
+      const task = entities[id];
+      return !!task && task.projectId === INBOX_PROJECT.id && !task.isDone;
+    });
     if (hasExampleTasksInInbox && this._activeWorkContextId() !== INBOX_PROJECT.id) {
       this._phase.set('explore-inbox');
     } else {

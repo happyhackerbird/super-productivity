@@ -64,6 +64,8 @@ import { distinctUntilChanged, observeOn } from 'rxjs/operators';
       }
 
       <button
+        #playBtn
+        (pointerdown)="onPlayPointerDown()"
         (click)="onPlayClick()"
         (contextmenu)="$event.preventDefault(); openFeatureMenu()"
         (longPress)="onLongPress()"
@@ -82,10 +84,13 @@ import { distinctUntilChanged, observeOn } from 'rxjs/operators';
         }
       </button>
 
-      <!-- Anchor only: opened from right-click / long-press on the button -->
+      <!-- Anchor only: opened from right-click / long-press (or the context-menu
+           key) on the button, so focus returns to the button, not the anchor. -->
       <span
         class="feature-menu-anchor"
         [matMenuTriggerFor]="featureMenu"
+        [matMenuTriggerRestoreFocus]="false"
+        (menuClosed)="onFeatureMenuClosed()"
       ></span>
       <mat-menu #featureMenu="matMenu">
         <button
@@ -196,6 +201,8 @@ export class PlayButtonComponent implements OnInit, OnDestroy {
   readonly hasTrackableTasks = input<boolean>(true);
   readonly circleSvg = viewChild<ElementRef<SVGCircleElement>>('circleSvg');
   readonly featureMenuTrigger = viewChild(MatMenuTrigger);
+  // `read`: on a Material button the template ref is the component, not the element.
+  readonly playBtn = viewChild('playBtn', { read: ElementRef<HTMLButtonElement> });
 
   readonly isDisabled = computed(
     () => !this.currentTaskId() && !this.hasTrackableTasks(),
@@ -207,6 +214,11 @@ export class PlayButtonComponent implements OnInit, OnDestroy {
   private _subs = new Subscription();
   private circumference = 10 * 2 * Math.PI; // ~62.83
   protected hasTimeEstimate = false;
+
+  /** A new press starts fresh, whether or not the last long press ended in a click. */
+  onPlayPointerDown(): void {
+    this._isLongPressClick = false;
+  }
 
   onPlayClick(): void {
     // The click that ends a long press must not also start or stop tracking.
@@ -225,6 +237,10 @@ export class PlayButtonComponent implements OnInit, OnDestroy {
   /** Same "Disable feature" as the side nav items offer for their features. */
   openFeatureMenu(): void {
     this.featureMenuTrigger()?.openMenu();
+  }
+
+  onFeatureMenuClosed(): void {
+    this.playBtn()?.nativeElement.focus();
   }
 
   disableTimeTracking(): void {

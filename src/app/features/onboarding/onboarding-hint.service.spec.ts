@@ -23,6 +23,7 @@ const ONBOARDING_KEYS = [
   LS.ONBOARDING_HINTS_DONE,
   LS.IS_SKIP_TOUR,
   LS.EXAMPLE_TASKS_CREATED,
+  LS.EXAMPLE_TASK_IDS,
 ];
 
 const makeTask = (id: string, partial: Partial<Task> = {}): Task =>
@@ -100,6 +101,7 @@ describe('OnboardingHintService', () => {
     }
     // A fresh install seeds example tasks; tests that need an older install unset it.
     localStorage.setItem(LS.EXAMPLE_TASKS_CREATED, 'true');
+    localStorage.setItem(LS.EXAMPLE_TASK_IDS, JSON.stringify([EXAMPLE_TASK.id]));
 
     isShowAddTaskBar = signal(false);
     selectedTaskId = signal(null);
@@ -290,10 +292,17 @@ describe('OnboardingHintService', () => {
     });
 
     it('is skipped when the examples were never seeded here', () => {
-      localStorage.removeItem(LS.EXAMPLE_TASKS_CREATED);
+      localStorage.removeItem(LS.EXAMPLE_TASK_IDS);
       const service = createService();
       addFirstTask([EXAMPLE_TASK]);
       expect(service.currentStep()).toBeNull();
+    });
+
+    it("does not mistake the user's own Inbox tasks for the example tips", () => {
+      const service = createService();
+      addFirstTask([makeTask('own-inbox-task', { projectId: 'INBOX_PROJECT' })]);
+      expect(service.currentStep()).toBeNull();
+      expect(localStorage.getItem(LS.ONBOARDING_HINTS_DONE)).toBe('true');
     });
 
     it('is skipped when the Inbox is already open', () => {

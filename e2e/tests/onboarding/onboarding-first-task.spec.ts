@@ -128,8 +128,16 @@ test.describe('First-run onboarding', () => {
     await addTaskViaComposer(page, `Tracking off task ${Date.now()}`);
 
     const playBtn = page.locator('.tour-playBtn');
+    const disableItem = page.getByRole('menuitem', { name: 'Disable feature' });
+    // Closing the menu hands focus back to the play button.
     await playBtn.click({ button: 'right' });
-    await page.getByRole('menuitem', { name: 'Disable feature' }).click();
+    await expect(disableItem).toBeVisible();
+    await page.keyboard.press('Escape');
+    await expect(disableItem).toHaveCount(0);
+    await expect(playBtn).toBeFocused();
+
+    await playBtn.click({ button: 'right' });
+    await disableItem.click();
     await expect(playBtn).toHaveCount(0);
 
     await waitForStatePersistence(page);

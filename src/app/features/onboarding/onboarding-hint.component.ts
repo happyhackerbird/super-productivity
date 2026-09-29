@@ -50,6 +50,12 @@ interface StepConfig {
   showShortcut: boolean;
   /** Pulse the target element to draw attention to it */
   isPulse: boolean;
+  /**
+   * End guidance when no target shows up. Only for the last, purely informative
+   * tip: otherwise an invisible step would keep onboarding "in progress", which
+   * holds back the install prompt, sync reminder and task snacks.
+   */
+  isEndedWhenMissing?: boolean;
 }
 
 const STEP_CONFIGS = new Map<OnboardingStep, StepConfig>([
@@ -97,6 +103,7 @@ const STEP_CONFIGS = new Map<OnboardingStep, StepConfig>([
       title: T.ONBOARDING.HINTS.DONE_TITLE,
       message: T.ONBOARDING.HINTS.EXPLORE_INBOX,
       doneLabel: T.ONBOARDING.HINTS.GOT_IT,
+      isEndedWhenMissing: true,
       showShortcut: false,
       isPulse: false,
     },
@@ -277,6 +284,8 @@ export class OnboardingHintComponent {
         }
         if (retryCount < MAX_POSITION_RETRIES) {
           this._schedulePosition(step, retryCount + 1);
+        } else if (STEP_CONFIGS.get(step)?.isEndedWhenMissing) {
+          this.skip();
         }
       },
       retryCount === 0 ? 0 : POSITION_RETRY_DELAY_MS,
