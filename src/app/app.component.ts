@@ -420,9 +420,7 @@ export class AppComponent implements OnDestroy, AfterViewInit {
     return this._activeWorkContextId() ?? null;
   }
 
-  onTaskAdded(event: TaskAddEvent): void {
-    const { taskId } = event;
-    this.onboardingHintService.onTaskAdded(event);
+  onTaskAdded({ taskId }: TaskAddEvent): void {
     this.layoutService.setPendingFocusTaskId(taskId);
     this.layoutService.scrollToNewTask(taskId);
     if (this.onboardingHintService.shouldAutoCloseFirstTaskComposer(taskId)) {

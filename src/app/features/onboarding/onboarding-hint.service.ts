@@ -1,21 +1,24 @@
 import { computed, effect, inject, Injectable, signal, untracked } from '@angular/core';
 import { MatDialog } from '@angular/material/dialog';
-import { Store } from '@ngrx/store';
-import { Subscription } from 'rxjs';
-import { concatMap, first } from 'rxjs/operators';
+import { ofType } from '@ngrx/effects';
+import { Action, Store } from '@ngrx/store';
+import { Observable, Subscription } from 'rxjs';
+import { concatMap, filter, first } from 'rxjs/operators';
+import { Log } from '../../core/log';
 import { LS } from '../../core/persistence/storage-keys.const';
 import { LayoutService } from '../../core-ui/layout/layout.service';
 import { DataInitStateService } from '../../core/data-init/data-init-state.service';
 import { SnackService } from '../../core/snack/snack.service';
 import { isTouchActive } from '../../util/input-intent';
+import { LOCAL_ACTIONS } from '../../util/local-actions.token';
+import { TaskSharedActions } from '../../root-store/meta/task-shared.actions';
 import { T } from '../../t.const';
 import { AppFeaturesConfig } from '../config/global-config.model';
 import { GlobalConfigService } from '../config/global-config.service';
 import { ProjectService } from '../project/project.service';
 import { TaskService } from '../tasks/task.service';
 import { selectTaskEntities } from '../tasks/store/task.selectors';
-import { TaskAddEvent } from '../tasks/add-task-bar/add-task-bar.component';
-import { SIMPLE_TODO_FEATURES } from './onboarding-presets.const';
+import { SIMPLE_TODO_DISABLED_FEATURES } from './onboarding-presets.const';
 
 type DialogSyncCfgComponentType =
   typeof import('../../imex/sync/dialog-sync-cfg/dialog-sync-cfg.component').DialogSyncCfgComponent;
@@ -30,7 +33,8 @@ const RETURNING_USER_MIN_PROJECTS = 3;
 /**
  * First-run guidance: value first, no upfront decision.
  *
- * 1. Point at "+" until the user adds their first real task via the composer.
+ * 1. Point at "+" until the user creates their first real task (any local
+ *    creation path; example tasks and repeat instances do not count).
  * 2. Offer, next to that task, to track time on it or to simplify to a to-do list.
  *    Ignoring the offer changes nothing. Feature settings are only written on an
  *    explicit choice, because appFeatures sync to the user's other devices.
@@ -48,11 +52,13 @@ export class OnboardingHintService {
   private _snackService = inject(SnackService);
   private _matDialog = inject(MatDialog);
   private _store = inject(Store);
+  private _localActions$: Observable<Action> = inject(LOCAL_ACTIONS);
 
   private _phase = signal<OnboardingPhase>('idle');
   private _isSyncDialogOpen = signal(false);
   private _isFirstTaskComposerAutoCloseUsed = false;
   private _startSub: Subscription | null = null;
+  private _taskAddSub: Subscription | null = null;
   private _taskEntities = this._store.selectSignal(selectTaskEntities);
 
   readonly offerTaskId = signal<string | null>(null);
@@ -117,8 +123,14 @@ export class OnboardingHintService {
         first(),
       )
       .subscribe((projects) => {
+        // Tasks we did not seed ourselves mean an install that predates the
+        // onboarding flags, not a new user.
+        const hasNonExampleTasks =
+          !localStorage.getItem(LS.EXAMPLE_TASKS_CREATED) &&
+          Object.keys(this._taskEntities()).length > 0;
         if (
           projects.length >= RETURNING_USER_MIN_PROJECTS ||
+          hasNonExampleTasks ||
           this._globalConfigService.sync()?.isEnabled
         ) {
           this._markDone();
@@ -126,6 +138,13 @@ export class OnboardingHintService {
         }
         this._phase.set('await-first-task');
       });
+
+    this._taskAddSub = this._localActions$
+      .pipe(
+        ofType(TaskSharedActions.addTask),
+        filter(({ isExampleTask, task }) => !isExampleTask && !task.repeatCfgId),
+      )
+      .subscribe(({ task }) => this._onFirstTaskCandidate(task.id));
   }
 
   static isOnboardingInProgress(): boolean {
@@ -133,26 +152,6 @@ export class OnboardingHintService {
       !localStorage.getItem(LS.ONBOARDING_HINTS_DONE) &&
       !localStorage.getItem(LS.IS_SKIP_TOUR)
     );
-  }
-
-  /** Called for every task created through the global add-task bar. */
-  onTaskAdded({ taskId, isNewTask }: TaskAddEvent): void {
-    if (this._phase() !== 'await-first-task' || !isNewTask) {
-      return;
-    }
-    if (!this._taskEntities()[taskId]) {
-      return;
-    }
-    // From here on a reload counts as dismissing the offer.
-    localStorage.setItem(LS.ONBOARDING_PRESET_DONE, 'true');
-
-    // Someone who turned tracking off before adding a task has already chosen.
-    if (!this._globalConfigService.appFeatures().isTimeTrackingEnabled) {
-      this._markDone();
-      return;
-    }
-    this.offerTaskId.set(taskId);
-    this._phase.set('track-offer');
   }
 
   /**
@@ -192,7 +191,12 @@ export class OnboardingHintService {
     if (this._phase() !== 'track-offer') {
       return;
     }
-    this._globalConfigService.updateSection('appFeatures', SIMPLE_TODO_FEATURES, true);
+    // Only switch features off; never re-enable something the user hid.
+    this._globalConfigService.updateSection(
+      'appFeatures',
+      SIMPLE_TODO_DISABLED_FEATURES,
+      true,
+    );
     this._snackService.open({
       type: 'SUCCESS',
       msg: T.ONBOARDING.HINTS.SIMPLIFIED,
@@ -211,7 +215,8 @@ export class OnboardingHintService {
         await import('../../imex/sync/dialog-sync-cfg/dialog-sync-cfg.component'));
     } catch (e) {
       this._isSyncDialogOpen.set(false);
-      throw e;
+      Log.err('OnboardingHintService: failed to load sync dialog', e);
+      return;
     }
     this._matDialog
       .open(DialogSyncCfgComponent)
@@ -225,6 +230,22 @@ export class OnboardingHintService {
       });
   }
 
+  private _onFirstTaskCandidate(taskId: string): void {
+    if (this._phase() !== 'await-first-task' || !this._taskEntities()[taskId]) {
+      return;
+    }
+    // From here on a reload counts as dismissing the offer.
+    localStorage.setItem(LS.ONBOARDING_PRESET_DONE, 'true');
+
+    // Someone who turned tracking off before adding a task has already chosen.
+    if (!this._globalConfigService.appFeatures().isTimeTrackingEnabled) {
+      this._markDone();
+      return;
+    }
+    this.offerTaskId.set(taskId);
+    this._phase.set('track-offer');
+  }
+
   skip(): void {
     this._markDone();
   }
@@ -234,6 +255,8 @@ export class OnboardingHintService {
     localStorage.setItem(LS.ONBOARDING_HINTS_DONE, 'true');
     this._startSub?.unsubscribe();
     this._startSub = null;
+    this._taskAddSub?.unsubscribe();
+    this._taskAddSub = null;
     this.offerTaskId.set(null);
     this._phase.set('idle');
   }

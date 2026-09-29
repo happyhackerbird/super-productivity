@@ -46,7 +46,7 @@
 .hint-secondary {
   margin-top: var(--s-half);
   color: var(--text-color-muted);
-  font-size: 12px;
+  font-size: var(--font-size-sm);
   line-height: 1.35;
 }
 
@@ -60,7 +60,7 @@
   cursor: pointer;
 
   &:focus-visible {
-    outline: 2px solid var(--palette-primary-500);
+    outline: var(--focus-ring-width) solid var(--palette-primary-500);
     outline-offset: 2px;
   }
 }

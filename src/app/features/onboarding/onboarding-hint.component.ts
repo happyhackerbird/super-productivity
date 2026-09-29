@@ -1,20 +1,25 @@
+import { LiveAnnouncer } from '@angular/cdk/a11y';
 import {
   ChangeDetectionStrategy,
   Component,
+  DestroyRef,
   ElementRef,
   effect,
   HostListener,
   inject,
+  NgZone,
   signal,
+  untracked,
   viewChild,
 } from '@angular/core';
 import { MatButton } from '@angular/material/button';
-import { TranslatePipe } from '@ngx-translate/core';
+import { TranslatePipe, TranslateService } from '@ngx-translate/core';
 import { OnboardingHintService, OnboardingStep } from './onboarding-hint.service';
 import { isTouchActive } from '../../util/input-intent';
 import { GlobalConfigService } from '../config/global-config.service';
 import { LayoutService } from '../../core-ui/layout/layout.service';
 import { T } from '../../t.const';
+import { truncate } from '../../util/truncate';
 
 /** Max retries when target element is not yet in the DOM */
 const MAX_POSITION_RETRIES = 10;
@@ -88,11 +93,17 @@ export class OnboardingHintComponent {
   onboardingHintService = inject(OnboardingHintService);
   hintPosition = signal<HintPosition | null>(null);
   hintMessage = signal<string>('');
+  hintMessageParams = signal<Record<string, string>>({});
   shortcutHint = signal<string | null>(null);
   isFloating = signal(false);
 
   private _globalConfigService = inject(GlobalConfigService);
   private _layoutService = inject(LayoutService);
+  private _liveAnnouncer = inject(LiveAnnouncer);
+  private _translateService = inject(TranslateService);
+  private _activeStep: OnboardingStep | null = null;
+  private _targetEl: HTMLElement | null = null;
+  private _repositionFrame: number | null = null;
   private _pulsingEl: HTMLElement | null = null;
   private _resizeObserver: ResizeObserver | null = null;
   private _positionTimeout: ReturnType<typeof setTimeout> | null = null;
@@ -105,15 +116,39 @@ export class OnboardingHintComponent {
       if (step === null) {
         return;
       }
+      this._activeStep = step;
+      this._targetEl = null;
       this.hintPosition.set(null);
+      untracked(() => this._announce(step));
       this._schedulePosition(step, 0);
 
       onCleanup(() => {
+        this._activeStep = null;
+        this._targetEl = null;
         this._cleanupPulse();
         this._clearPositionTimeout();
         this._clearRepositionTimeout();
         this._resizeObserver?.disconnect();
       });
+    });
+
+    // The hint is position: fixed, so follow its target when anything scrolls
+    // (capture phase: the task list scrolls inside its own container).
+    const onViewportChange = (): void => this._scheduleReposition();
+    const ngZone = inject(NgZone);
+    ngZone.runOutsideAngular(() => {
+      document.addEventListener('scroll', onViewportChange, {
+        capture: true,
+        passive: true,
+      });
+      window.addEventListener('resize', onViewportChange, { passive: true });
+    });
+    inject(DestroyRef).onDestroy(() => {
+      document.removeEventListener('scroll', onViewportChange, { capture: true });
+      window.removeEventListener('resize', onViewportChange);
+      if (this._repositionFrame !== null) {
+        cancelAnimationFrame(this._repositionFrame);
+      }
     });
   }
 
@@ -141,6 +176,52 @@ export class OnboardingHintComponent {
 
   openSyncSetup(): void {
     void this.onboardingHintService.openSyncSetup();
+  }
+
+  private _announce(step: OnboardingStep): void {
+    const config = STEP_CONFIGS.get(step);
+    if (!config) {
+      return;
+    }
+    const key = isTouchActive()
+      ? (config.touchMessage ?? config.message)
+      : config.message;
+    void this._liveAnnouncer.announce(
+      this._translateService.instant(key, this._getMessageParams(step)),
+    );
+  }
+
+  private _getMessageParams(step: OnboardingStep): Record<string, string> {
+    if (step !== 'track-offer') {
+      return {};
+    }
+    return { title: truncate(this.onboardingHintService.offerTask()?.title ?? '') };
+  }
+
+  /** Re-anchor on scroll/resize; re-attaches a floating card once its task shows up. */
+  private _scheduleReposition(): void {
+    if (this._repositionFrame !== null || !this._activeStep || !this.hintPosition()) {
+      return;
+    }
+    this._repositionFrame = requestAnimationFrame(() => {
+      this._repositionFrame = null;
+      const step = this._activeStep;
+      if (!step) {
+        return;
+      }
+      if (this._targetEl?.isConnected) {
+        this._calculatePosition(this._targetEl, step, this._measureHintHeight());
+      } else if (
+        !this._positionHintForStep(step) &&
+        STEP_CONFIGS.get(step)?.isFloatingFallback
+      ) {
+        this._showFloating();
+      }
+    });
+  }
+
+  private _measureHintHeight(): number | undefined {
+    return this.hintChipEl()?.nativeElement.getBoundingClientRect().height || undefined;
   }
 
   private _schedulePosition(step: OnboardingStep, retryCount: number): void {
@@ -180,7 +261,7 @@ export class OnboardingHintComponent {
       return false;
     }
 
-    this._updateMessage(config);
+    this._updateMessage(config, step);
 
     const isMobile = isTouchActive() && this._layoutService.isShowMobileBottomNav();
     const selector = config.selector(isMobile, this.onboardingHintService.offerTaskId());
@@ -193,6 +274,7 @@ export class OnboardingHintComponent {
       return false;
     }
 
+    this._targetEl = targetEl;
     this.isFloating.set(false);
     if (config.isPulse) {
       this._applyPulse(targetEl);
@@ -221,16 +303,18 @@ export class OnboardingHintComponent {
   }
 
   private _showFloating(): void {
+    this._targetEl = null;
     this._resizeObserver?.disconnect();
     this._cleanupPulse();
     this.isFloating.set(true);
     this.hintPosition.set({ top: 0, left: 0, arrowOffset: 0, arrowDirection: 'up' });
   }
 
-  private _updateMessage(config: StepConfig): void {
+  private _updateMessage(config: StepConfig, step: OnboardingStep): void {
     this.hintMessage.set(
       isTouchActive() ? (config.touchMessage ?? config.message) : config.message,
     );
+    this.hintMessageParams.set(this._getMessageParams(step));
     if (!isTouchActive() && config.showShortcut) {
       const shortcut = this._globalConfigService.cfg()?.keyboard?.addNewTask;
       this.shortcutHint.set(shortcut || null);

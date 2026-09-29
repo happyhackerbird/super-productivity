@@ -1,11 +1,12 @@
 import { AppFeaturesConfig } from '../config/global-config.model';
 
 /**
- * Applied only when a new user explicitly picks "Just a to-do list" in the
+ * Switched off only when a new user explicitly picks "Just a to-do list" in the
  * first-task onboarding card. Never applied automatically: an automatic
  * appFeatures write would sync to (and override) the user's other devices.
+ * Features that stay on are left untouched, so nothing the user hid comes back.
  */
-export const SIMPLE_TODO_FEATURES: AppFeaturesConfig = {
+export const SIMPLE_TODO_DISABLED_FEATURES: Partial<AppFeaturesConfig> = {
   isTimeTrackingEnabled: false,
   isFocusModeEnabled: false,
   isSchedulerEnabled: false,
@@ -13,10 +14,6 @@ export const SIMPLE_TODO_FEATURES: AppFeaturesConfig = {
   isBoardsEnabled: false,
   isScheduleDayPanelEnabled: false,
   isIssuesPanelEnabled: false,
-  isProjectNotesEnabled: true,
-  isSyncIconEnabled: true,
-  isSearchEnabled: true,
-  isDonatePageEnabled: true,
   isHabitsEnabled: false,
   isFinishDayEnabled: false,
 };

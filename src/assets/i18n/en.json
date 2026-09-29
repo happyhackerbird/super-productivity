@@ -3045,7 +3045,7 @@
     "HINTS": {
       "CREATE_TASK": "Click + to add your first task",
       "CREATE_TASK_TOUCH": "Tap + to add your first task",
-      "TRACK_OFFER": "Want to track time on this task?",
+      "TRACK_OFFER": "Want to track time on “{{title}}”?",
       "START_TIMER": "Start timer",
       "SIMPLIFY": "Just a to-do list",
       "SIMPLIFIED": "Switched to a simple to-do list. Turn features back on in Settings > App Features.",

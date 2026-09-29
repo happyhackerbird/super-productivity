@@ -11,7 +11,7 @@ const pixel5TestOptions = { ...devices['Pixel 5'] };
 // Browser type is worker-scoped and cannot be overridden inside a describe block.
 Reflect.deleteProperty(pixel5TestOptions, 'defaultBrowserType');
 
-const TRACK_OFFER = 'Want to track time on this task?';
+const TRACK_OFFER = /Want to track time on “.+”\?/;
 
 const openFreshApp = async (page: Page): Promise<void> => {
   await page.addInitScript(() => {
@@ -118,6 +118,52 @@ test.describe('First-run onboarding', () => {
     await addTaskViaComposer(page, `Second task ${Date.now()}`);
     await expect(page.locator('onboarding-hint')).toHaveCount(0);
     assertNoRuntimeBrowserErrors(runtimeErrors, 'onboarding dismiss');
+    await page.close();
+  });
+
+  test('names the task and stays below task menus', async ({ isolatedContext }) => {
+    const page = await isolatedContext.newPage();
+    const runtimeErrors = attachPageErrorCollector(page, 'onboarding overlay');
+    installDevErrorDialogHandler(page, 'onboarding overlay');
+    await openFreshApp(page);
+
+    const taskTitle = `Menu first task ${Date.now()}`;
+    await addTaskViaComposer(page, taskTitle);
+    const hint = page.locator('onboarding-hint');
+    await expect(hint).toContainText(`Want to track time on “${taskTitle}”?`);
+
+    await page.locator('task').filter({ hasText: taskTitle }).first().click({
+      button: 'right',
+    });
+    const menuPanel = page.locator('.mat-mdc-menu-panel').first();
+    await expect(menuPanel).toBeVisible();
+    // The card sits right under the task, so the menu overlaps it. Menus render in
+    // the CDK overlay (browser top layer): the menu's left edge, where the overlap
+    // is, must be topmost for every visible entry.
+    const deleteItem = menuPanel.getByRole('menuitem', { name: /Delete task/ });
+    await expect(deleteItem).toBeVisible();
+    // Guard: the check below is only meaningful while the two actually overlap.
+    const cardBox = await hint.locator('.hint-chip').boundingBox();
+    const menuBox = await menuPanel.boundingBox();
+    expect(cardBox && menuBox && menuBox.x < cardBox.x + cardBox.width).toBeTruthy();
+    await expect
+      .poll(() =>
+        menuPanel.evaluate((panel) =>
+          Array.from(panel.querySelectorAll<HTMLElement>('[role="menuitem"]'))
+            .filter((item) => item.getBoundingClientRect().width > 0)
+            .every((item) => {
+              const rect = item.getBoundingClientRect();
+              const halfHeight = rect.height / 2;
+              const topEl = document.elementFromPoint(
+                rect.left + 8,
+                rect.top + halfHeight,
+              );
+              return !!topEl && panel.contains(topEl);
+            }),
+        ),
+      )
+      .toBe(true);
+    assertNoRuntimeBrowserErrors(runtimeErrors, 'onboarding overlay');
     await page.close();
   });
 

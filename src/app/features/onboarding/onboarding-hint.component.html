@@ -3,9 +3,8 @@
   <div
     class="hint-container"
     [class.floating]="isFloating()"
-    [attr.role]="step === 'track-offer' ? 'region' : 'status'"
-    [attr.aria-label]="step === 'track-offer' ? (hintMessage() | translate) : null"
-    aria-live="polite"
+    role="region"
+    [attr.aria-label]="hintMessage() | translate: hintMessageParams()"
     [style.top.px]="isFloating() ? null : pos.top"
     [style.left.px]="isFloating() ? null : pos.left"
   >
@@ -23,7 +22,9 @@
     >
       <div class="hint-text">
         @if (hintMessage()) {
-          <div class="hint-message">{{ hintMessage() | translate }}</div>
+          <div class="hint-message">
+            {{ hintMessage() | translate: hintMessageParams() }}
+          </div>
         }
         @if (shortcutHint(); as shortcut) {
           <span class="shortcut-hint">
