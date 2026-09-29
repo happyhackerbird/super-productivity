@@ -46,15 +46,18 @@
   }
 </header>
 
+@let ungroupedTasks =
+  isTaskGroupingEnabled() ? (day.ungroupedTasks ?? day.tasks) : day.tasks;
+
 <div class="normal-tasks">
   <div
     class="normal-tasks-items"
     cdkDropList
     [cdkDropListData]="day.dayDate"
     [cdkDropListAutoScrollStep]="8"
-    (cdkDropListDropped)="drop('TODO', day.tasks, $event)"
+    (cdkDropListDropped)="drop('TODO', ungroupedTasks, $event)"
   >
-    @for (task of day.tasks; track task.id) {
+    @for (task of ungroupedTasks; track task.id) {
       <planner-task
         cdkDrag
         [cdkDragData]="task"
@@ -96,6 +99,39 @@
   </div>
 
   <add-task-inline [planForDay]="day.dayDate"></add-task-inline>
+
+  @if (isTaskGroupingEnabled()) {
+    @for (group of day.taskGroups; track group.id) {
+      <div
+        class="task-group"
+        cdkDropList
+        [attr.data-task-group]="group.id"
+        [cdkDropListData]="day.dayDate"
+        [cdkDropListAutoScrollStep]="8"
+        (cdkDropListDropped)="dropInGroup(group.id, group.tasks, $event)"
+      >
+        @for (task of group.tasks; track task.id) {
+          <planner-task
+            cdkDrag
+            [cdkDragData]="task"
+            [cdkDragStartDelay]="dragDelayForTouch()"
+            [cdkDragLockAxis]="isXs() ? 'y' : ''"
+            [task]="task"
+            [day]="day.dayDate"
+            [focusable]="true"
+          ></planner-task>
+        }
+      </div>
+    }
+
+    <div
+      class="new-task-group-drop-zone"
+      cdkDropList
+      [cdkDropListData]="day.dayDate"
+      [cdkDropListAutoScrollStep]="8"
+      (cdkDropListDropped)="dropInNewGroup($event)"
+    ></div>
+  }
 </div>
 
 <div
@@ -112,6 +148,7 @@
     class="scheduled-items"
     cdkDropList
     cdkDropListSortingDisabled
+    [cdkDropListEnterPredicate]="canEnterScheduled"
     [cdkDropListData]="day.dayDate"
     [cdkDropListAutoScrollStep]="8"
     (cdkDropListDropped)="drop('SCHEDULED', day.scheduledIItems, $event)"

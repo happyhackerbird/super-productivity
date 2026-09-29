@@ -755,6 +755,58 @@ describe('PlannerTaskComponent', () => {
         scope.remove();
       });
     }
+
+    it('only reorders within the own list for a day with task groups', () => {
+      const scope = document.createElement('planner-day');
+      scope.setAttribute('data-planner-selection-scope', '2026-09-12');
+      const normal = document.createElement('div');
+      normal.className = 'normal-tasks';
+      scope.appendChild(normal);
+      const addRow = (parent: HTMLElement, id: string): HTMLElement => {
+        const row = document.createElement('planner-task');
+        row.setAttribute('data-task-id', id);
+        row.setAttribute('data-task-selectable', 'true');
+        parent.appendChild(row);
+        return row;
+      };
+      const ungrouped = document.createElement('div');
+      ungrouped.className = 'normal-tasks-items';
+      normal.appendChild(ungrouped);
+      addRow(ungrouped, 'ungrouped');
+      const group = document.createElement('div');
+      group.className = 'task-group';
+      normal.appendChild(group);
+      const host = addRow(group, 't1');
+      addRow(group, 'groupLast');
+      document.body.appendChild(scope);
+      const { component } = create(makeTask(), true, '2026-09-12');
+      (
+        component as unknown as { _elementRef: { nativeElement: HTMLElement } }
+      )._elementRef.nativeElement = host;
+
+      (
+        component as unknown as {
+          _reorderAllDay: (direction: 'up' | 'down' | 'top' | 'bottom') => void;
+        }
+      )._reorderAllDay('down');
+
+      expect(storeMock.dispatch).toHaveBeenCalledWith(
+        moveTaskDownInTodayList({
+          taskId: 't1',
+          workContextType: WorkContextType.TAG,
+          workContextId: TODAY_TAG.id,
+          doneTaskIds: ['t1', 'groupLast'],
+        }),
+      );
+      storeMock.dispatch.calls.reset();
+      (
+        component as unknown as {
+          _reorderAllDay: (direction: 'up' | 'down' | 'top' | 'bottom') => void;
+        }
+      )._reorderAllDay('up');
+      expect(storeMock.dispatch).not.toHaveBeenCalled();
+      scope.remove();
+    });
   });
 
   it('intercepts a modifier click before an embedded control activates', () => {

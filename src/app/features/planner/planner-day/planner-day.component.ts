@@ -4,6 +4,7 @@ import {
   computed,
   HostBinding,
   inject,
+  input,
   Input,
 } from '@angular/core';
 import { T } from '../../../t.const';
@@ -37,6 +38,11 @@ import { LayoutService } from '../../../core-ui/layout/layout.service';
 import { DateTimeFormatService } from '../../../core/date-time-format/date-time-format.service';
 import { parseDbDateStr } from '../../../util/parse-db-date-str';
 import { safeFormatDate } from '../../../util/safe-format-date';
+import { selectPlannerState } from '../store/planner.selectors';
+import { selectTodayTaskIds } from '../../work-context/store/work-context.selectors';
+import { selectTodayTagTaskIds } from '../../tag/store/tag.reducer';
+import { createPlannerGroupId } from '../store/planner-task-groups.util';
+import { planGroupDrop } from './plan-group-drop.util';
 
 @Component({
   selector: 'planner-day',
@@ -74,6 +80,10 @@ export class PlannerDayComponent {
   //  and migrating would break narrowing currently.
   @Input() day!: PlannerDay;
 
+  // Task groups are a plan view feature. Without this the day looks and behaves
+  // the same as before, e.g. for the daily summary.
+  readonly isTaskGroupingEnabled = input(false);
+
   @HostBinding('attr.data-day') get dataDayAttr(): string | undefined {
     return this.day?.dayDate;
   }
@@ -89,6 +99,17 @@ export class PlannerDayComponent {
   // Lock Y-axis on small screens only — on wider screens the planner uses a
   // multi-column grid where cross-column dragging requires horizontal movement.
   protected readonly isXs = this._layoutService.isXs;
+
+  private readonly _plannerState = this._store.selectSignal(selectPlannerState);
+  private readonly _todayTaskIds = this._store.selectSignal(selectTodayTaskIds);
+  private readonly _storedTodayTaskIds = this._store.selectSignal(selectTodayTagTaskIds);
+
+  // Untimed tasks can only be dropped between scheduled items, not into the
+  // empty list: the area below the tasks starts a new group instead.
+  protected readonly canEnterScheduled = (drag: CdkDrag<TaskCopy>): boolean =>
+    !this.isTaskGroupingEnabled() ||
+    !!drag.data?.dueWithTime ||
+    this.day.scheduledIItems.length > 0;
 
   // Precompute the weekday ('EEE') header label, keyed on the current locale.
   // Replaces a per-CD `| localeDate: 'EEE'` pipe. The parent tracks planner-day
@@ -134,6 +155,13 @@ export class PlannerDayComponent {
       }
       return;
     } else if (targetList === 'TODO') {
+      if (
+        this.isTaskGroupingEnabled() &&
+        (!!this.day.taskGroups?.length || !!task.plannerGroup)
+      ) {
+        this._dropInTaskList(null, allItems as TaskCopy[], ev);
+        return;
+      }
       if (ev.previousContainer === ev.container) {
         if (this.day.isToday) {
           this._store.dispatch(
@@ -164,6 +192,46 @@ export class PlannerDayComponent {
         );
       }
     }
+  }
+
+  dropInGroup(
+    groupId: string,
+    groupTasks: TaskCopy[],
+    ev: CdkDragDrop<string, string, TaskCopy>,
+  ): void {
+    this._dropInTaskList(groupId, groupTasks, ev);
+  }
+
+  dropInNewGroup(ev: CdkDragDrop<string, string, TaskCopy>): void {
+    // cdk keeps the last entered list as drop target, even if the pointer left it
+    if (!ev.isPointerOverContainer) {
+      return;
+    }
+    this._dropInTaskList(createPlannerGroupId(), [], ev);
+  }
+
+  private _dropInTaskList(
+    targetGroupId: string | null,
+    targetTasks: TaskCopy[],
+    ev: CdkDragDrop<string, string, TaskCopy>,
+  ): void {
+    if (ev.previousContainer === ev.container && ev.previousIndex === ev.currentIndex) {
+      return;
+    }
+    const newDay = ev.container.data;
+    const today = this._dateService.todayStr();
+    planGroupDrop({
+      task: ev.item.data,
+      prevDay: ev.previousContainer.data,
+      newDay,
+      today,
+      targetGroupId,
+      targetTaskIds: targetTasks.map((t) => t.id),
+      dropIndex: ev.currentIndex,
+      dayTaskIds:
+        newDay === today ? this._todayTaskIds() : this._plannerState().days[newDay] || [],
+      storedTodayTaskIds: this._storedTodayTaskIds(),
+    }).forEach((action) => this._store.dispatch(action));
   }
 
   editTaskReminderOrReScheduleIfPossible(task: TaskCopy, newDay?: string): void {

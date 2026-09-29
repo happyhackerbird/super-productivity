@@ -8,6 +8,11 @@ export enum ScheduleItemType {
   RepeatProjection = 'RepeatProjection',
 }
 
+export interface PlannerTaskGroup {
+  id: string;
+  tasks: TaskCopy[];
+}
+
 export interface PlannerDay {
   isToday?: boolean;
   dayDate: string;
@@ -15,6 +20,9 @@ export interface PlannerDay {
   timeLimit: number;
   itemsTotal: number;
   tasks: TaskCopy[];
+  // `tasks` split for the plan view; groups are never empty
+  ungroupedTasks?: TaskCopy[];
+  taskGroups?: PlannerTaskGroup[];
   deadlineTasks: TaskCopy[];
   noStartTimeRepeatProjections: NoStartTimeRepeatProjection[];
   allDayEvents: ScheduleFromCalendarEvent[];

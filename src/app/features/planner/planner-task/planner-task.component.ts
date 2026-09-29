@@ -50,6 +50,7 @@ import { millisecondsDiffToRemindOption } from '../../tasks/util/remind-option-t
 import { PlannerActions } from '../store/planner.actions';
 import { DialogConfirmComponent } from '../../../ui/dialog-confirm/dialog-confirm.component';
 import { first } from 'rxjs/operators';
+import { selectPlannerState } from '../store/planner.selectors';
 import { isInputElement, isLinkTarget } from '../../../util/dom-element';
 import { isMultiSelectModifierEvent } from '../../../util/is-multi-select-modifier-event';
 import { parseDbDateStr } from '../../../util/parse-db-date-str';
@@ -623,13 +624,23 @@ export class PlannerTaskComponent implements OnInit, OnDestroy, AfterViewInit {
       return;
     }
     const scope = host.closest<HTMLElement>('[data-planner-selection-scope]');
-    const rows = scope
+    // with task groups a task is only moved within its own list
+    const groupedList = scope?.querySelector('.task-group')
+      ? host.closest<HTMLElement>('.normal-tasks-items, .task-group')
+      : null;
+    const rows = groupedList
       ? Array.from(
-          scope.querySelectorAll<HTMLElement>(
-            '.normal-tasks planner-task[data-task-selectable="true"]',
+          groupedList.querySelectorAll<HTMLElement>(
+            'planner-task[data-task-selectable="true"]',
           ),
         )
-      : [];
+      : scope
+        ? Array.from(
+            scope.querySelectorAll<HTMLElement>(
+              '.normal-tasks planner-task[data-task-selectable="true"]',
+            ),
+          )
+        : [];
     const fromIndex = rows.indexOf(host);
     const toIndex =
       direction === 'up'
@@ -663,6 +674,26 @@ export class PlannerTaskComponent implements OnInit, OnDestroy, AfterViewInit {
               ? moveTaskToTopInTodayList(props)
               : moveTaskToBottomInTodayList(props);
       this._store.dispatch(action);
+    } else if (groupedList) {
+      // the rows are only a part of the day, so look up their position in it
+      const targetTaskId = rows[toIndex].getAttribute('data-task-id') as string;
+      this._store
+        .select(selectPlannerState)
+        .pipe(first())
+        .subscribe((plannerState) => {
+          const dayTaskIds = plannerState.days[day] || [];
+          const rawFromIndex = dayTaskIds.indexOf(this.task().id);
+          const rawToIndex = dayTaskIds.indexOf(targetTaskId);
+          if (rawFromIndex !== -1 && rawToIndex !== -1) {
+            this._store.dispatch(
+              PlannerActions.moveInList({
+                targetDay: day,
+                fromIndex: rawFromIndex,
+                toIndex: rawToIndex,
+              }),
+            );
+          }
+        });
     } else {
       this._store.dispatch(
         PlannerActions.moveInList({ targetDay: day, fromIndex, toIndex }),
