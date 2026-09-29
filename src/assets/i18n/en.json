@@ -3040,17 +3040,15 @@
     "TASK_MARKED_DONE": "Task marked as done"
   },
   "ONBOARDING": {
-    "SYNC_CTA": "Already using Super Productivity on another device?",
-    "SYNC_CTA_LINK": "Set up sync",
     "HINTS": {
       "CREATE_TASK": "Click + to add your first task",
       "CREATE_TASK_TOUCH": "Tap + to add your first task",
-      "TRACK_OFFER": "Want to track time on “{{title}}”?",
-      "START_TIMER": "Start timer",
+      "TRACK_OFFER": "Want to see how long it takes? Click play to track time.",
+      "TRACK_OFFER_TOUCH": "Want to see how long it takes? Tap play to track time.",
       "SIMPLIFY": "Just a to-do list",
       "SIMPLIFIED": "Switched to a simple to-do list. Turn features back on in Settings > App Features.",
-      "PAUSE": "Time is being tracked. Click here to pause – the time stays on the task.",
-      "PAUSE_TOUCH": "Time is being tracked. Tap here to pause – the time stays on the task.",
+      "PAUSE": "Tracking “{{title}}”. Click again to pause – the time stays on the task.",
+      "PAUSE_TOUCH": "Tracking “{{title}}”. Tap again to pause – the time stays on the task.",
       "OR_PRESS": "or press",
       "SKIP_ARIA": "Dismiss hint"
     }

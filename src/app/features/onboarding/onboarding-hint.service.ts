@@ -1,10 +1,8 @@
 import { computed, effect, inject, Injectable, signal, untracked } from '@angular/core';
-import { MatDialog } from '@angular/material/dialog';
 import { ofType } from '@ngrx/effects';
 import { Action, Store } from '@ngrx/store';
 import { Observable, Subscription } from 'rxjs';
 import { concatMap, filter, first } from 'rxjs/operators';
-import { Log } from '../../core/log';
 import { LS } from '../../core/persistence/storage-keys.const';
 import { LayoutService } from '../../core-ui/layout/layout.service';
 import { DataInitStateService } from '../../core/data-init/data-init-state.service';
@@ -13,15 +11,11 @@ import { isTouchActive } from '../../util/input-intent';
 import { LOCAL_ACTIONS } from '../../util/local-actions.token';
 import { TaskSharedActions } from '../../root-store/meta/task-shared.actions';
 import { T } from '../../t.const';
-import { AppFeaturesConfig } from '../config/global-config.model';
 import { GlobalConfigService } from '../config/global-config.service';
 import { ProjectService } from '../project/project.service';
 import { TaskService } from '../tasks/task.service';
 import { selectTaskEntities } from '../tasks/store/task.selectors';
 import { SIMPLE_TODO_DISABLED_FEATURES } from './onboarding-presets.const';
-
-type DialogSyncCfgComponentType =
-  typeof import('../../imex/sync/dialog-sync-cfg/dialog-sync-cfg.component').DialogSyncCfgComponent;
 
 export type OnboardingStep = 'create-task' | 'track-offer' | 'pause-hint';
 
@@ -35,10 +29,12 @@ const RETURNING_USER_MIN_PROJECTS = 3;
  *
  * 1. Point at "+" until the user creates their first real task (any local
  *    creation path; example tasks and repeat instances do not count).
- * 2. Offer, next to that task, to track time on it or to simplify to a to-do list.
- *    Ignoring the offer changes nothing. Feature settings are only written on an
- *    explicit choice, because appFeatures sync to the user's other devices.
- * 3. After "Start timer", point at the header pause button until tracking stops.
+ * 2. Point at the existing header play button: press play to track time, or
+ *    simplify to a to-do list. Ignoring the offer changes nothing. Feature
+ *    settings are only written on an explicit choice, because appFeatures sync
+ *    to the user's other devices.
+ * 3. Once tracking runs (started from anywhere), name the running task on the
+ *    same button and explain pausing, until tracking stops.
  *
  * No step advances on a timer. Reloading after the first task ends guidance.
  */
@@ -50,12 +46,10 @@ export class OnboardingHintService {
   private _projectService = inject(ProjectService);
   private _globalConfigService = inject(GlobalConfigService);
   private _snackService = inject(SnackService);
-  private _matDialog = inject(MatDialog);
   private _store = inject(Store);
   private _localActions$: Observable<Action> = inject(LOCAL_ACTIONS);
 
   private _phase = signal<OnboardingPhase>('idle');
-  private _isSyncDialogOpen = signal(false);
   private _isFirstTaskComposerAutoCloseUsed = false;
   private _startSub: Subscription | null = null;
   private _taskAddSub: Subscription | null = null;
@@ -68,18 +62,18 @@ export class OnboardingHintService {
     return id ? (this._taskEntities()[id] ?? null) : null;
   });
 
-  readonly isOfferTaskTrackable = computed(() => {
-    const task = this.offerTask();
-    return !!task && !task.isDone && task.subTaskIds.length === 0;
+  readonly currentTaskTitle = computed(() => {
+    const id = this._taskService.currentTaskId();
+    return id ? (this._taskEntities()[id]?.title ?? '') : '';
   });
 
-  /** Hints hide while the composer or the sync dialog is open. */
+  /** Hints hide while the composer is open. */
   readonly currentStep = computed<OnboardingStep | null>(() => {
     const phase = this._phase();
     if (phase === 'pause-hint') {
       return 'pause-hint';
     }
-    if (this._layoutService.isShowAddTaskBar() || this._isSyncDialogOpen()) {
+    if (this._layoutService.isShowAddTaskBar()) {
       return null;
     }
     if (phase === 'await-first-task') {
@@ -110,9 +104,21 @@ export class OnboardingHintService {
       }
     });
 
-    // Pausing (or tracking being turned off) completes the tracking hint.
+    // Tracking started (header play button, task play button, shortcut, ...):
+    // explain pausing. Pausing, or tracking being turned off, then ends guidance.
     effect(() => {
-      if (this._phase() === 'pause-hint' && this._taskService.currentTaskId() === null) {
+      const phase = this._phase();
+      const isTracking = this._taskService.currentTaskId() !== null;
+      if (phase === 'track-offer' && isTracking) {
+        this._phase.set('pause-hint');
+      } else if (phase === 'pause-hint' && !isTracking) {
+        untracked(() => this._markDone());
+      }
+    });
+
+    // A returning user who sets up sync needs no new-user guidance.
+    effect(() => {
+      if (this._globalConfigService.sync()?.isEnabled) {
         untracked(() => this._markDone());
       }
     });
@@ -170,23 +176,6 @@ export class OnboardingHintService {
     return isTouchActive() && this._layoutService.isShowMobileBottomNav();
   }
 
-  startTimerForOfferTask(): void {
-    const taskId = this.offerTaskId();
-    if (this._phase() !== 'track-offer' || !taskId || !this.isOfferTaskTrackable()) {
-      this._markDone();
-      return;
-    }
-    if (!this._globalConfigService.appFeatures().isTimeTrackingEnabled) {
-      this._globalConfigService.updateSection(
-        'appFeatures',
-        { isTimeTrackingEnabled: true } as Partial<AppFeaturesConfig>,
-        true,
-      );
-    }
-    this._taskService.setCurrentId(taskId);
-    this._phase.set('pause-hint');
-  }
-
   simplifyToTodoList(): void {
     if (this._phase() !== 'track-offer') {
       return;
@@ -202,32 +191,6 @@ export class OnboardingHintService {
       msg: T.ONBOARDING.HINTS.SIMPLIFIED,
     });
     this._markDone();
-  }
-
-  async openSyncSetup(): Promise<void> {
-    if (this._isSyncDialogOpen()) {
-      return;
-    }
-    this._isSyncDialogOpen.set(true);
-    let DialogSyncCfgComponent: DialogSyncCfgComponentType;
-    try {
-      ({ DialogSyncCfgComponent } =
-        await import('../../imex/sync/dialog-sync-cfg/dialog-sync-cfg.component'));
-    } catch (e) {
-      this._isSyncDialogOpen.set(false);
-      Log.err('OnboardingHintService: failed to load sync dialog', e);
-      return;
-    }
-    this._matDialog
-      .open(DialogSyncCfgComponent)
-      .afterClosed()
-      .subscribe(() => {
-        this._isSyncDialogOpen.set(false);
-        // A returning user restoring their data needs no new-user guidance.
-        if (this._globalConfigService.sync()?.isEnabled) {
-          this._markDone();
-        }
-      });
   }
 
   private _onFirstTaskCandidate(taskId: string): void {

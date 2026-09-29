@@ -2,20 +2,17 @@
   @let step = onboardingHintService.currentStep();
   <div
     class="hint-container"
-    [class.floating]="isFloating()"
     role="region"
     [attr.aria-label]="hintMessage() | translate: hintMessageParams()"
-    [style.top.px]="isFloating() ? null : pos.top"
-    [style.left.px]="isFloating() ? null : pos.left"
+    [style.top.px]="pos.top"
+    [style.left.px]="pos.left"
   >
-    @if (!isFloating()) {
-      <div
-        class="hint-arrow"
-        [class.arrow-up]="pos.arrowDirection === 'up'"
-        [class.arrow-down]="pos.arrowDirection === 'down'"
-        [style.left.px]="pos.arrowOffset"
-      ></div>
-    }
+    <div
+      class="hint-arrow"
+      [class.arrow-up]="pos.arrowDirection === 'up'"
+      [class.arrow-down]="pos.arrowDirection === 'down'"
+      [style.left.px]="pos.arrowOffset"
+    ></div>
     <div
       #hintChipEl
       class="hint-chip"
@@ -31,31 +28,8 @@
             {{ T.ONBOARDING.HINTS.OR_PRESS | translate }} <kbd>{{ shortcut }}</kbd>
           </span>
         }
-        @if (step === 'create-task') {
-          <div class="hint-secondary">
-            {{ T.ONBOARDING.SYNC_CTA | translate }}
-            <button
-              type="button"
-              class="hint-link"
-              (click)="openSyncSetup()"
-            >
-              {{ T.ONBOARDING.SYNC_CTA_LINK | translate }}
-            </button>
-          </div>
-        }
         @if (step === 'track-offer') {
           <div class="hint-buttons">
-            @if (onboardingHintService.isOfferTaskTrackable()) {
-              <button
-                mat-flat-button
-                color="primary"
-                type="button"
-                class="e2e-onboarding-start-timer"
-                (click)="startTimer()"
-              >
-                {{ T.ONBOARDING.HINTS.START_TIMER | translate }}
-              </button>
-            }
             <button
               mat-button
               type="button"

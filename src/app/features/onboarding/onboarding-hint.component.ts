@@ -24,17 +24,14 @@ import { truncate } from '../../util/truncate';
 /** Max retries when target element is not yet in the DOM */
 const MAX_POSITION_RETRIES = 10;
 const POSITION_RETRY_DELAY_MS = 120;
-const MOBILE_CREATE_TASK_HINT_VERTICAL_OFFSET = 10;
 
 interface StepConfig {
-  selector: (isMobile: boolean, offerTaskId: string | null) => string | null;
+  selector: (isMobile: boolean) => string;
   message: string;
   touchMessage?: string;
   showShortcut: boolean;
   /** Pulse the target element to draw attention to it */
   isPulse: boolean;
-  /** Show the hint floating when the target cannot be found */
-  isFloatingFallback: boolean;
 }
 
 const STEP_CONFIGS = new Map<OnboardingStep, StepConfig>([
@@ -46,19 +43,17 @@ const STEP_CONFIGS = new Map<OnboardingStep, StepConfig>([
       touchMessage: T.ONBOARDING.HINTS.CREATE_TASK_TOUCH,
       showShortcut: true,
       isPulse: true,
-      isFloatingFallback: false,
     },
   ],
   [
     'track-offer',
     {
-      // Resolved from outside the task list so task.component stays untouched.
-      selector: (_isMobile, offerTaskId) =>
-        offerTaskId ? `task[data-task-id="${CSS.escape(offerTaskId)}"]` : null,
+      // The existing header play button; disabled when nothing here can be tracked.
+      selector: () => '.tour-playBtn:not(:disabled)',
       message: T.ONBOARDING.HINTS.TRACK_OFFER,
+      touchMessage: T.ONBOARDING.HINTS.TRACK_OFFER_TOUCH,
       showShortcut: false,
-      isPulse: false,
-      isFloatingFallback: true,
+      isPulse: true,
     },
   ],
   [
@@ -69,7 +64,6 @@ const STEP_CONFIGS = new Map<OnboardingStep, StepConfig>([
       touchMessage: T.ONBOARDING.HINTS.PAUSE_TOUCH,
       showShortcut: false,
       isPulse: false,
-      isFloatingFallback: false,
     },
   ],
 ]);
@@ -95,7 +89,6 @@ export class OnboardingHintComponent {
   hintMessage = signal<string>('');
   hintMessageParams = signal<Record<string, string>>({});
   shortcutHint = signal<string | null>(null);
-  isFloating = signal(false);
 
   private _globalConfigService = inject(GlobalConfigService);
   private _layoutService = inject(LayoutService);
@@ -166,16 +159,8 @@ export class OnboardingHintComponent {
     this.onboardingHintService.skip();
   }
 
-  startTimer(): void {
-    this.onboardingHintService.startTimerForOfferTask();
-  }
-
   simplify(): void {
     this.onboardingHintService.simplifyToTodoList();
-  }
-
-  openSyncSetup(): void {
-    void this.onboardingHintService.openSyncSetup();
   }
 
   private _announce(step: OnboardingStep): void {
@@ -192,15 +177,16 @@ export class OnboardingHintComponent {
   }
 
   private _getMessageParams(step: OnboardingStep): Record<string, string> {
-    if (step !== 'track-offer') {
+    if (step !== 'pause-hint') {
       return {};
     }
-    return { title: truncate(this.onboardingHintService.offerTask()?.title ?? '') };
+    // Name the task that is actually running, which may not be the one just added.
+    return { title: truncate(this.onboardingHintService.currentTaskTitle()) };
   }
 
-  /** Re-anchor on scroll/resize; re-attaches a floating card once its task shows up. */
+  /** Re-anchor on scroll/resize, or attach once the target appears. */
   private _scheduleReposition(): void {
-    if (this._repositionFrame !== null || !this._activeStep || !this.hintPosition()) {
+    if (this._repositionFrame !== null || !this._activeStep) {
       return;
     }
     this._repositionFrame = requestAnimationFrame(() => {
@@ -210,12 +196,9 @@ export class OnboardingHintComponent {
         return;
       }
       if (this._targetEl?.isConnected) {
-        this._calculatePosition(this._targetEl, step, this._measureHintHeight());
-      } else if (
-        !this._positionHintForStep(step) &&
-        STEP_CONFIGS.get(step)?.isFloatingFallback
-      ) {
-        this._showFloating();
+        this._calculatePosition(this._targetEl, step);
+      } else {
+        this._positionHintForStep(step);
       }
     });
   }
@@ -233,8 +216,6 @@ export class OnboardingHintComponent {
         }
         if (retryCount < MAX_POSITION_RETRIES) {
           this._schedulePosition(step, retryCount + 1);
-        } else if (STEP_CONFIGS.get(step)?.isFloatingFallback) {
-          this._showFloating();
         }
       },
       retryCount === 0 ? 0 : POSITION_RETRY_DELAY_MS,
@@ -264,18 +245,12 @@ export class OnboardingHintComponent {
     this._updateMessage(config, step);
 
     const isMobile = isTouchActive() && this._layoutService.isShowMobileBottomNav();
-    const selector = config.selector(isMobile, this.onboardingHintService.offerTaskId());
-    if (selector === null) {
-      return false;
-    }
-
-    const targetEl = document.querySelector<HTMLElement>(selector);
+    const targetEl = document.querySelector<HTMLElement>(config.selector(isMobile));
     if (!targetEl) {
       return false;
     }
 
     this._targetEl = targetEl;
-    this.isFloating.set(false);
     if (config.isPulse) {
       this._applyPulse(targetEl);
     } else {
@@ -286,9 +261,8 @@ export class OnboardingHintComponent {
     // After the hint renders, re-measure with actual height for accurate positioning
     this._clearRepositionTimeout();
     this._repositionTimeout = setTimeout(() => {
-      const measured = this.hintChipEl()?.nativeElement.getBoundingClientRect().height;
-      if (measured && targetEl.isConnected) {
-        this._calculatePosition(targetEl, step, measured);
+      if (targetEl.isConnected) {
+        this._calculatePosition(targetEl, step);
       }
     }, 0);
 
@@ -300,14 +274,6 @@ export class OnboardingHintComponent {
     });
     this._resizeObserver.observe(targetEl);
     return true;
-  }
-
-  private _showFloating(): void {
-    this._targetEl = null;
-    this._resizeObserver?.disconnect();
-    this._cleanupPulse();
-    this.isFloating.set(true);
-    this.hintPosition.set({ top: 0, left: 0, arrowOffset: 0, arrowDirection: 'up' });
   }
 
   private _updateMessage(config: StepConfig, step: OnboardingStep): void {
@@ -323,31 +289,19 @@ export class OnboardingHintComponent {
     }
   }
 
-  private _calculatePosition(
-    targetEl: HTMLElement,
-    step: OnboardingStep,
-    measuredHintHeight?: number,
-  ): void {
+  private _calculatePosition(targetEl: HTMLElement, step: OnboardingStep): void {
     const rect = targetEl.getBoundingClientRect();
     // Must match max-width in onboarding-hint.component.scss
     const hintWidth = 260;
-    // Approximate rendered height of the hint chip.
-    // Touch hints can wrap to multiple lines, especially for task gesture onboarding.
-    const estimatedHintHeight = step === 'track-offer' ? 120 : isTouchActive() ? 76 : 48;
-    const hintHeight = measuredHintHeight ?? estimatedHintHeight;
+    // Prefer the rendered height: an estimate that is too small makes a hint
+    // placed above its target (e.g. the mobile + button) cover it.
+    const estimatedHintHeight = step === 'track-offer' ? 96 : isTouchActive() ? 76 : 48;
+    const hintHeight = this._measureHintHeight() ?? estimatedHintHeight;
     const gap = 12;
 
     const spaceBelow = window.innerHeight - rect.bottom;
     const placeBelow = spaceBelow > hintHeight + gap;
-
-    const verticalOffset =
-      step === 'create-task' && isTouchActive() && !placeBelow
-        ? MOBILE_CREATE_TASK_HINT_VERTICAL_OFFSET
-        : 0;
-    const top = Math.max(
-      8,
-      placeBelow ? rect.bottom + gap : rect.top - hintHeight - gap + verticalOffset,
-    );
+    const top = Math.max(8, placeBelow ? rect.bottom + gap : rect.top - hintHeight - gap);
 
     const halfTargetWidth = rect.width / 2;
     const halfHintWidth = hintWidth / 2;

@@ -11,7 +11,7 @@ const pixel5TestOptions = { ...devices['Pixel 5'] };
 // Browser type is worker-scoped and cannot be overridden inside a describe block.
 Reflect.deleteProperty(pixel5TestOptions, 'defaultBrowserType');
 
-const TRACK_OFFER = /Want to track time on “.+”\?/;
+const TRACK_OFFER = /Want to see how long it takes\?/;
 
 const openFreshApp = async (page: Page): Promise<void> => {
   await page.addInitScript(() => {
@@ -21,6 +21,15 @@ const openFreshApp = async (page: Page): Promise<void> => {
   await expect(page.locator('onboarding-hint')).toContainText(
     'Click + to add your first task',
   );
+};
+
+const expectHintBelow = async (page: Page, targetSelector: string): Promise<void> => {
+  const target = await page.locator(targetSelector).boundingBox();
+  const chip = await page.locator('onboarding-hint .hint-chip').boundingBox();
+  expect(target && chip).toBeTruthy();
+  // Attached right under the target, never covering it.
+  expect(chip!.y).toBeGreaterThanOrEqual(target!.y + target!.height);
+  expect(chip!.y - (target!.y + target!.height)).toBeLessThan(30);
 };
 
 const addTaskViaComposer = async (page: Page, title: string): Promise<void> => {
@@ -35,7 +44,7 @@ const addTaskViaComposer = async (page: Page, title: string): Promise<void> => {
 };
 
 test.describe('First-run onboarding', () => {
-  test('offers tracking on the first task and starts the timer on it', async ({
+  test('points at the existing play button after the first task', async ({
     isolatedContext,
   }) => {
     const page = await isolatedContext.newPage();
@@ -48,13 +57,17 @@ test.describe('First-run onboarding', () => {
 
     const hint = page.locator('onboarding-hint');
     await expect(hint).toContainText(TRACK_OFFER);
-    await hint.getByRole('button', { name: 'Start timer' }).click();
+    await expect
+      .poll(() => expectHintBelow(page, '.tour-playBtn').then(() => true))
+      .toBe(true);
 
+    // The real play button starts tracking; the hint then names the running task.
+    await page.locator('.tour-playBtn').click();
     const task = page.locator('task').filter({ hasText: taskTitle }).first();
     await expect(task).toHaveClass(/isCurrent/);
-    await expect(hint).toContainText('Time is being tracked');
+    await expect(hint).toContainText(`Tracking “${taskTitle}”`);
 
-    // Pausing through the header button completes the guidance.
+    // Pausing through the same button completes the guidance.
     await page.locator('.tour-playBtn').click();
     await expect(task).not.toHaveClass(/isCurrent/);
     await expect(hint).toHaveCount(0);
@@ -111,6 +124,9 @@ test.describe('First-run onboarding', () => {
     await addTaskViaComposer(page, `Dismissed first task ${Date.now()}`);
     const hint = page.locator('onboarding-hint');
     await expect(hint).toContainText(TRACK_OFFER);
+    // Focus returns to + after the composer closes; move it so the + tooltip
+    // does not sit on top of the hint's close button.
+    await page.mouse.click(640, 600);
     await hint.getByRole('button', { name: 'Dismiss hint' }).click();
     await expect(hint).toHaveCount(0);
     await expect(page.locator('.tour-playBtn')).toBeVisible();
@@ -118,52 +134,6 @@ test.describe('First-run onboarding', () => {
     await addTaskViaComposer(page, `Second task ${Date.now()}`);
     await expect(page.locator('onboarding-hint')).toHaveCount(0);
     assertNoRuntimeBrowserErrors(runtimeErrors, 'onboarding dismiss');
-    await page.close();
-  });
-
-  test('names the task and stays below task menus', async ({ isolatedContext }) => {
-    const page = await isolatedContext.newPage();
-    const runtimeErrors = attachPageErrorCollector(page, 'onboarding overlay');
-    installDevErrorDialogHandler(page, 'onboarding overlay');
-    await openFreshApp(page);
-
-    const taskTitle = `Menu first task ${Date.now()}`;
-    await addTaskViaComposer(page, taskTitle);
-    const hint = page.locator('onboarding-hint');
-    await expect(hint).toContainText(`Want to track time on “${taskTitle}”?`);
-
-    await page.locator('task').filter({ hasText: taskTitle }).first().click({
-      button: 'right',
-    });
-    const menuPanel = page.locator('.mat-mdc-menu-panel').first();
-    await expect(menuPanel).toBeVisible();
-    // The card sits right under the task, so the menu overlaps it. Menus render in
-    // the CDK overlay (browser top layer): the menu's left edge, where the overlap
-    // is, must be topmost for every visible entry.
-    const deleteItem = menuPanel.getByRole('menuitem', { name: /Delete task/ });
-    await expect(deleteItem).toBeVisible();
-    // Guard: the check below is only meaningful while the two actually overlap.
-    const cardBox = await hint.locator('.hint-chip').boundingBox();
-    const menuBox = await menuPanel.boundingBox();
-    expect(cardBox && menuBox && menuBox.x < cardBox.x + cardBox.width).toBeTruthy();
-    await expect
-      .poll(() =>
-        menuPanel.evaluate((panel) =>
-          Array.from(panel.querySelectorAll<HTMLElement>('[role="menuitem"]'))
-            .filter((item) => item.getBoundingClientRect().width > 0)
-            .every((item) => {
-              const rect = item.getBoundingClientRect();
-              const halfHeight = rect.height / 2;
-              const topEl = document.elementFromPoint(
-                rect.left + 8,
-                rect.top + halfHeight,
-              );
-              return !!topEl && panel.contains(topEl);
-            }),
-        ),
-      )
-      .toBe(true);
-    assertNoRuntimeBrowserErrors(runtimeErrors, 'onboarding overlay');
     await page.close();
   });
 
@@ -188,7 +158,7 @@ test.describe('First-run onboarding', () => {
   test.describe('mobile', () => {
     test.use(pixel5TestOptions);
 
-    test('closes the composer after the first task and shows the offer', async ({
+    test('keeps + uncovered and points at play after the first task', async ({
       isolatedContext,
     }) => {
       const page = await isolatedContext.newPage();
@@ -207,6 +177,14 @@ test.describe('First-run onboarding', () => {
       await expect(page.locator('onboarding-hint')).toContainText(
         'Tap + to add your first task',
       );
+      // The hint sits above the + button and must not cover it.
+      const addBtn = await page.locator('.add-task-button').boundingBox();
+      await expect
+        .poll(async () => {
+          const chip = await page.locator('onboarding-hint .hint-chip').boundingBox();
+          return chip ? chip.y + chip.height <= addBtn!.y : false;
+        })
+        .toBe(true);
 
       await page.getByRole('button', { name: 'Add new task' }).tap();
       const input = page.locator('add-task-bar.global .main-input');
@@ -215,12 +193,12 @@ test.describe('First-run onboarding', () => {
 
       await expect(page.locator('add-task-bar.global')).toBeHidden();
       const hint = page.locator('onboarding-hint');
-      await expect(hint).toContainText(TRACK_OFFER);
-      await hint.getByRole('button', { name: 'Start timer' }).tap();
+      await expect(hint).toContainText('Tap play to track time');
+      await page.locator('.tour-playBtn').tap();
       await expect(
         page.locator('task').filter({ hasText: 'My first mobile task' }).first(),
       ).toHaveClass(/isCurrent/);
-      await expect(hint).toContainText('Tap here to pause');
+      await expect(hint).toContainText('Tap again to pause');
       assertNoRuntimeBrowserErrors(runtimeErrors, 'mobile onboarding');
       await page.close();
     });

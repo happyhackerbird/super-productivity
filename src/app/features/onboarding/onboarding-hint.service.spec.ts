@@ -1,6 +1,5 @@
 import { signal, WritableSignal } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
-import { MatDialog } from '@angular/material/dialog';
 import { MockStore, provideMockStore } from '@ngrx/store/testing';
 import { Action } from '@ngrx/store';
 import { BehaviorSubject, Subject } from 'rxjs';
@@ -45,10 +44,8 @@ describe('OnboardingHintService', () => {
   };
   let taskService: {
     currentTaskId: WritableSignal<string | null>;
-    setCurrentId: jasmine.Spy;
   };
   let snackService: jasmine.SpyObj<SnackService>;
-  let matDialog: jasmine.SpyObj<MatDialog>;
   let localActions$: Subject<Action>;
   let dataLoaded$: BehaviorSubject<boolean> | Subject<boolean>;
   let savedLs: Record<string, string | null>;
@@ -109,10 +106,8 @@ describe('OnboardingHintService', () => {
     };
     taskService = {
       currentTaskId,
-      setCurrentId: jasmine.createSpy('setCurrentId'),
     };
     snackService = jasmine.createSpyObj<SnackService>('SnackService', ['open']);
-    matDialog = jasmine.createSpyObj<MatDialog>('MatDialog', ['open']);
     localActions$ = new Subject<Action>();
     dataLoaded$ = new BehaviorSubject(true);
 
@@ -136,7 +131,6 @@ describe('OnboardingHintService', () => {
         { provide: GlobalConfigService, useValue: globalConfigService },
         { provide: TaskService, useValue: taskService },
         { provide: SnackService, useValue: snackService },
-        { provide: MatDialog, useValue: matDialog },
         { provide: LOCAL_ACTIONS, useValue: localActions$ },
       ],
     });
@@ -243,36 +237,16 @@ describe('OnboardingHintService', () => {
     expect(service.currentStep()).toBe('create-task');
   });
 
-  it('hides hints during sync setup and ends guidance once sync is enabled', async () => {
-    const afterClosed$ = new Subject<void>();
-    matDialog.open.and.returnValue({
-      afterClosed: () => afterClosed$,
-    } as unknown as ReturnType<MatDialog['open']>);
+  it('ends guidance when the user enables sync mid-onboarding', () => {
     const service = createService();
-
-    await service.openSyncSetup();
-    expect(matDialog.open).toHaveBeenCalledTimes(1);
-    expect(service.currentStep()).toBeNull();
-
+    expect(service.currentStep()).toBe('create-task');
     syncEnabled.set(true);
-    afterClosed$.next();
+    TestBed.tick();
+    expect(service.currentStep()).toBeNull();
     expect(localStorage.getItem(LS.ONBOARDING_HINTS_DONE)).toBe('true');
   });
 
-  it('shows the + hint again when sync setup is closed without enabling sync', async () => {
-    const afterClosed$ = new Subject<void>();
-    matDialog.open.and.returnValue({
-      afterClosed: () => afterClosed$,
-    } as unknown as ReturnType<MatDialog['open']>);
-    const service = createService();
-
-    await service.openSyncSetup();
-    afterClosed$.next();
-    expect(service.currentStep()).toBe('create-task');
-    expect(localStorage.getItem(LS.ONBOARDING_HINTS_DONE)).toBeNull();
-  });
-
-  it('offers tracking beside the first real task once the composer closes', () => {
+  it('offers tracking after the first real task once the composer closes', () => {
     const service = createService();
     isShowAddTaskBar.set(true);
     addFirstTask(service);
@@ -283,7 +257,6 @@ describe('OnboardingHintService', () => {
     isShowAddTaskBar.set(false);
     expect(service.currentStep()).toBe('track-offer');
     expect(service.offerTaskId()).toBe('task-1');
-    expect(service.isOfferTaskTrackable()).toBeTrue();
   });
 
   it('ends guidance without an offer when tracking was turned off before', () => {
@@ -294,33 +267,22 @@ describe('OnboardingHintService', () => {
     expect(localStorage.getItem(LS.ONBOARDING_HINTS_DONE)).toBe('true');
   });
 
-  it('starts the timer on exactly the offered task, then hints at pause', () => {
+  it('explains pausing once tracking starts, naming the running task', () => {
     const service = createService();
     addFirstTask(service);
+    expect(service.currentStep()).toBe('track-offer');
 
-    service.startTimerForOfferTask();
-    expect(taskService.setCurrentId).toHaveBeenCalledOnceWith('task-1');
-    expect(globalConfigService.updateSection).not.toHaveBeenCalled();
-
+    // Started via the header play button, a task play button or a shortcut.
     currentTaskId.set('task-1');
     TestBed.tick();
     expect(service.currentStep()).toBe('pause-hint');
+    expect(service.currentTaskTitle()).toBe('task-1');
+    expect(globalConfigService.updateSection).not.toHaveBeenCalled();
 
     currentTaskId.set(null);
     TestBed.tick();
     expect(service.currentStep()).toBeNull();
     expect(localStorage.getItem(LS.ONBOARDING_HINTS_DONE)).toBe('true');
-  });
-
-  it('does not start a task that became a parent task', () => {
-    const service = createService();
-    addFirstTask(service);
-    setTasks([makeTask('task-1', { subTaskIds: ['sub-1'] })]);
-
-    expect(service.isOfferTaskTrackable()).toBeFalse();
-    service.startTimerForOfferTask();
-    expect(taskService.setCurrentId).not.toHaveBeenCalled();
-    expect(service.currentStep()).toBeNull();
   });
 
   it('switches features off only when the user picks a to-do list', () => {
