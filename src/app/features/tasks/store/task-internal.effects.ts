@@ -26,7 +26,6 @@ import {
 import { DateService } from '../../../core/date/date.service';
 import { filterOutTodayTag } from '../../../root-store/meta/task-shared-meta-reducers/task-shared-helpers';
 import { fastArrayCompare } from '../../../util/fast-array-compare';
-import { findTaskToStart } from '../util/find-task-to-start';
 
 @Injectable()
 export class TaskInternalEffects {
@@ -351,7 +350,19 @@ export class TaskInternalEffects {
         nextId = Array.isArray(nextId) ? nextId[0] : nextId;
       }
     } else {
-      nextId = findTaskToStart(state, todaysTaskIds);
+      const lastTask = state.lastCurrentTaskId && entities[state.lastCurrentTaskId];
+      const isLastSelectable =
+        state.lastCurrentTaskId &&
+        lastTask &&
+        !lastTask.isDone &&
+        !lastTask.subTaskIds.length;
+      if (isLastSelectable) {
+        nextId = state.lastCurrentTaskId;
+      } else {
+        const selectable =
+          flattenToSelectable(todaysTaskIds).find(filterUndoneNotCurrent);
+        nextId = Array.isArray(selectable) ? selectable[0] : selectable;
+      }
     }
 
     return nextId;

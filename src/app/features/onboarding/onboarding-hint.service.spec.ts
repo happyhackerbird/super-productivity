@@ -6,13 +6,10 @@ import { BehaviorSubject, Subject } from 'rxjs';
 import { LS } from '../../core/persistence/storage-keys.const';
 import { LayoutService } from '../../core-ui/layout/layout.service';
 import { DataInitStateService } from '../../core/data-init/data-init-state.service';
-import { SnackService } from '../../core/snack/snack.service';
-import { AppFeaturesConfig } from '../config/global-config.model';
 import { GlobalConfigService } from '../config/global-config.service';
-import { DEFAULT_GLOBAL_CONFIG } from '../config/default-global-config.const';
 import { ProjectService } from '../project/project.service';
-import { selectTaskFeatureState } from '../tasks/store/task.selectors';
-import { Task, TaskState } from '../tasks/task.model';
+import { selectTaskEntities } from '../tasks/store/task.selectors';
+import { Task } from '../tasks/task.model';
 import { TaskService } from '../tasks/task.service';
 import { TaskFocusService } from '../tasks/task-focus.service';
 import { WorkContextType } from '../work-context/work-context.model';
@@ -20,7 +17,6 @@ import { WorkContextService } from '../work-context/work-context.service';
 import { TaskSharedActions } from '../../root-store/meta/task-shared.actions';
 import { LOCAL_ACTIONS } from '../../util/local-actions.token';
 import { OnboardingHintService } from './onboarding-hint.service';
-import { SIMPLE_TODO_DISABLED_FEATURES } from './onboarding-presets.const';
 
 const ONBOARDING_KEYS = [
   LS.ONBOARDING_PRESET_DONE,
@@ -32,43 +28,39 @@ const ONBOARDING_KEYS = [
 const makeTask = (id: string, partial: Partial<Task> = {}): Task =>
   ({ id, title: id, isDone: false, subTaskIds: [], ...partial }) as Task;
 
+const EXAMPLE_TASK = makeTask('example', { projectId: 'INBOX_PROJECT' });
+
 describe('OnboardingHintService', () => {
   let store: MockStore;
   let isShowAddTaskBar: WritableSignal<boolean>;
-  let currentTaskId: WritableSignal<string | null>;
   let selectedTaskId: WritableSignal<string | null>;
   let isTaskContextMenuOpen: WritableSignal<boolean>;
-  let appFeatures: WritableSignal<AppFeaturesConfig>;
   let syncEnabled: WritableSignal<boolean>;
   let projects$: BehaviorSubject<{ id: string }[]>;
-  let globalConfigService: {
-    appFeatures: WritableSignal<AppFeaturesConfig>;
-    sync: () => { isEnabled: boolean };
-    updateSection: jasmine.Spy;
-  };
-  let taskService: {
-    currentTaskId: WritableSignal<string | null>;
-    selectedTaskId: WritableSignal<string | null>;
-  };
-  let snackService: jasmine.SpyObj<SnackService>;
+  let updateSection: jasmine.Spy;
   let localActions$: Subject<Action>;
   let dataLoaded$: BehaviorSubject<boolean> | Subject<boolean>;
-  let mainListTaskIds$: BehaviorSubject<string[]>;
   let activeWorkContextId$: BehaviorSubject<string | null>;
   let savedLs: Record<string, string | null>;
 
-  const setTasks = (tasks: Task[], lastCurrentTaskId: string | null = null): void => {
-    store.overrideSelector(selectTaskFeatureState, {
-      ids: tasks.map((t) => t.id),
-      entities: Object.fromEntries(tasks.map((t) => [t.id, t])),
-      lastCurrentTaskId,
-    } as unknown as TaskState);
+  const setTasks = (tasks: Task[]): void => {
+    store.overrideSelector(
+      selectTaskEntities,
+      Object.fromEntries(tasks.map((t) => [t.id, t])),
+    );
     store.refreshState();
   };
 
   const createService = (): OnboardingHintService => {
     const service = TestBed.inject(OnboardingHintService);
     TestBed.tick();
+    return service;
+  };
+
+  const createPhoneService = (): OnboardingHintService => {
+    const service = createService();
+    // Touch input cannot be simulated in the unit test browser.
+    spyOn(service, 'isSwipeLayout').and.returnValue(true);
     return service;
   };
 
@@ -86,10 +78,18 @@ describe('OnboardingHintService', () => {
     TestBed.tick();
   };
 
-  const addFirstTask = (_service: OnboardingHintService, id = 'task-1'): void => {
+  /** The first task, next to whatever other tasks exist (e.g. seeded examples). */
+  const addFirstTask = (otherTasks: Task[] = [], id = 'task-1'): void => {
     const task = makeTask(id);
-    setTasks([task]);
+    setTasks([task, ...otherTasks]);
     dispatchAddTask(task);
+  };
+
+  const markDone = (id = 'task-1'): void => {
+    localActions$.next(
+      TaskSharedActions.updateTask({ task: { id, changes: { isDone: true } } }),
+    );
+    TestBed.tick();
   };
 
   beforeEach(() => {
@@ -102,26 +102,13 @@ describe('OnboardingHintService', () => {
     localStorage.setItem(LS.EXAMPLE_TASKS_CREATED, 'true');
 
     isShowAddTaskBar = signal(false);
-    currentTaskId = signal(null);
     selectedTaskId = signal(null);
     isTaskContextMenuOpen = signal(false);
-    appFeatures = signal({ ...DEFAULT_GLOBAL_CONFIG.appFeatures });
     syncEnabled = signal(false);
     projects$ = new BehaviorSubject<{ id: string }[]>([{ id: 'INBOX_PROJECT' }]);
-
-    globalConfigService = {
-      appFeatures,
-      sync: () => ({ isEnabled: syncEnabled() }),
-      updateSection: jasmine.createSpy('updateSection'),
-    };
-    taskService = {
-      currentTaskId,
-      selectedTaskId,
-    };
-    snackService = jasmine.createSpyObj<SnackService>('SnackService', ['open']);
+    updateSection = jasmine.createSpy('updateSection');
     localActions$ = new Subject<Action>();
     dataLoaded$ = new BehaviorSubject(true);
-    mainListTaskIds$ = new BehaviorSubject<string[]>(['task-1']);
     activeWorkContextId$ = new BehaviorSubject<string | null>('TODAY');
 
     TestBed.configureTestingModule({
@@ -141,15 +128,14 @@ describe('OnboardingHintService', () => {
           },
         },
         { provide: ProjectService, useValue: { list$: projects$ } },
-        { provide: GlobalConfigService, useValue: globalConfigService },
-        { provide: TaskService, useValue: taskService },
-        { provide: SnackService, useValue: snackService },
-        { provide: LOCAL_ACTIONS, useValue: localActions$ },
         {
-          provide: WorkContextService,
-          useValue: { mainListTaskIds$, activeWorkContextId$ },
+          provide: GlobalConfigService,
+          useValue: { sync: () => ({ isEnabled: syncEnabled() }), updateSection },
         },
+        { provide: TaskService, useValue: { selectedTaskId } },
         { provide: TaskFocusService, useValue: { isTaskContextMenuOpen } },
+        { provide: WorkContextService, useValue: { activeWorkContextId$ } },
+        { provide: LOCAL_ACTIONS, useValue: localActions$ },
       ],
     });
     store = TestBed.inject(MockStore);
@@ -170,233 +156,123 @@ describe('OnboardingHintService', () => {
     }
   });
 
-  it('points at + for a new user and hides while the composer is open', () => {
-    const service = createService();
-    expect(service.currentStep()).toBe('create-task');
+  describe('first task', () => {
+    it('points at + for a new user and hides while the composer is open', () => {
+      const service = createService();
+      expect(service.currentStep()).toBe('create-task');
 
-    isShowAddTaskBar.set(true);
-    expect(service.currentStep()).toBeNull();
+      isShowAddTaskBar.set(true);
+      expect(service.currentStep()).toBeNull();
 
-    isShowAddTaskBar.set(false);
-    expect(service.currentStep()).toBe('create-task');
+      isShowAddTaskBar.set(false);
+      expect(service.currentStep()).toBe('create-task');
+    });
+
+    it('ignores example tasks, repeat instances and unknown task ids', () => {
+      const service = createService();
+      const example = makeTask('example');
+      const repeated = makeTask('repeated', { repeatCfgId: 'cfg-1' });
+      setTasks([example, repeated]);
+      dispatchAddTask(example, { isExampleTask: true });
+      dispatchAddTask(repeated);
+      dispatchAddTask(makeTask('missing'));
+      expect(service.currentStep()).toBe('create-task');
+      expect(localStorage.getItem(LS.ONBOARDING_PRESET_DONE)).toBeNull();
+    });
+
+    it('counts a task created outside the global add-task bar', () => {
+      // e.g. planner inline add, boards, share: all dispatch addTask locally
+      const service = createService();
+      addFirstTask([EXAMPLE_TASK], 'planner-task');
+      expect(service.firstTaskId()).toBe('planner-task');
+      expect(service.currentStep()).toBe('explore-inbox');
+    });
+
+    it('ignores tasks added before data has loaded', () => {
+      dataLoaded$ = new Subject<boolean>();
+      const service = createService();
+      addFirstTask();
+      expect(service.currentStep()).toBeNull();
+      expect(localStorage.getItem(LS.ONBOARDING_PRESET_DONE)).toBeNull();
+
+      dataLoaded$.next(true);
+      TestBed.tick();
+      expect(service.currentStep()).toBe('create-task');
+    });
+
+    it('never changes feature settings', () => {
+      const service = createService();
+      addFirstTask([EXAMPLE_TASK]);
+      activeWorkContextId$.next('INBOX_PROJECT');
+      TestBed.tick();
+      service.skip();
+      expect(updateSection).not.toHaveBeenCalled();
+    });
   });
 
-  it('never writes feature settings without an explicit choice', () => {
-    const service = createService();
-    addFirstTask(service);
-    service.skip();
-    expect(globalConfigService.updateSection).not.toHaveBeenCalled();
-  });
+  describe('who gets guidance', () => {
+    it('skips returning users with more than the default projects', () => {
+      projects$.next([{ id: 'INBOX_PROJECT' }, { id: 'p1' }, { id: 'p2' }]);
+      const service = createService();
+      expect(service.currentStep()).toBeNull();
+      expect(localStorage.getItem(LS.ONBOARDING_HINTS_DONE)).toBe('true');
+    });
 
-  it('skips guidance for returning users with more than the default projects', () => {
-    projects$.next([{ id: 'INBOX_PROJECT' }, { id: 'p1' }, { id: 'p2' }]);
-    const service = createService();
-    expect(service.currentStep()).toBeNull();
-    expect(localStorage.getItem(LS.ONBOARDING_HINTS_DONE)).toBe('true');
-  });
+    it('skips users with sync enabled', () => {
+      syncEnabled.set(true);
+      const service = createService();
+      expect(service.currentStep()).toBeNull();
+      expect(OnboardingHintService.isOnboardingInProgress()).toBeFalse();
+    });
 
-  it('skips guidance when sync is already enabled', () => {
-    syncEnabled.set(true);
-    const service = createService();
-    expect(service.currentStep()).toBeNull();
-    expect(OnboardingHintService.isOnboardingInProgress()).toBeFalse();
-  });
+    it('ends guidance when sync is enabled mid-onboarding', () => {
+      const service = createService();
+      expect(service.currentStep()).toBe('create-task');
+      syncEnabled.set(true);
+      TestBed.tick();
+      expect(service.currentStep()).toBeNull();
+      expect(localStorage.getItem(LS.ONBOARDING_HINTS_DONE)).toBe('true');
+    });
 
-  it('treats a first task from an earlier session as a dismissed offer', () => {
-    localStorage.setItem(LS.ONBOARDING_PRESET_DONE, 'true');
-    const service = createService();
-    expect(service.currentStep()).toBeNull();
-    expect(localStorage.getItem(LS.ONBOARDING_HINTS_DONE)).toBe('true');
-  });
+    it('does not start over after the first task was added in an earlier session', () => {
+      localStorage.setItem(LS.ONBOARDING_PRESET_DONE, 'true');
+      const service = createService();
+      expect(service.currentStep()).toBeNull();
+      expect(localStorage.getItem(LS.ONBOARDING_HINTS_DONE)).toBe('true');
+    });
 
-  it('ignores example tasks, repeat instances and unknown task ids', () => {
-    const service = createService();
-    const example = makeTask('example');
-    const repeated = makeTask('repeated', { repeatCfgId: 'cfg-1' });
-    setTasks([example, repeated]);
-    dispatchAddTask(example, { isExampleTask: true });
-    dispatchAddTask(repeated);
-    dispatchAddTask(makeTask('missing'));
-    expect(service.currentStep()).toBe('create-task');
-    expect(localStorage.getItem(LS.ONBOARDING_PRESET_DONE)).toBeNull();
-  });
+    it('skips installs whose tasks were not seeded by us', () => {
+      localStorage.removeItem(LS.EXAMPLE_TASKS_CREATED);
+      setTasks([makeTask('old-task')]);
+      const service = createService();
+      expect(service.currentStep()).toBeNull();
+      expect(localStorage.getItem(LS.ONBOARDING_HINTS_DONE)).toBe('true');
+    });
 
-  it('counts a task created outside the global add-task bar', () => {
-    // e.g. planner inline add, boards, share: all dispatch addTask locally
-    mainListTaskIds$.next(['planner-task']);
-    const service = createService();
-    addFirstTask(service, 'planner-task');
-    expect(service.currentStep()).toBe('track-offer');
-    expect(service.offerTaskId()).toBe('planner-task');
-  });
+    it('keeps guiding when the only existing tasks are seeded examples', () => {
+      setTasks([EXAMPLE_TASK]);
+      const service = createService();
+      expect(service.currentStep()).toBe('create-task');
+    });
 
-  it('ignores tasks added before data has loaded', () => {
-    dataLoaded$ = new Subject<boolean>();
-    const service = createService();
-    addFirstTask(service);
-    expect(service.currentStep()).toBeNull();
-    expect(localStorage.getItem(LS.ONBOARDING_PRESET_DONE)).toBeNull();
-
-    dataLoaded$.next(true);
-    TestBed.tick();
-    expect(service.currentStep()).toBe('create-task');
-  });
-
-  it('skips guidance for installs whose tasks were not seeded by us', () => {
-    localStorage.removeItem(LS.EXAMPLE_TASKS_CREATED);
-    setTasks([makeTask('old-task')]);
-    const service = createService();
-    expect(service.currentStep()).toBeNull();
-    expect(localStorage.getItem(LS.ONBOARDING_HINTS_DONE)).toBe('true');
-  });
-
-  it('keeps guiding when the only existing tasks are seeded examples', () => {
-    setTasks([makeTask('example')]);
-    const service = createService();
-    expect(service.currentStep()).toBe('create-task');
-  });
-
-  it('ends guidance when the user enables sync mid-onboarding', () => {
-    const service = createService();
-    expect(service.currentStep()).toBe('create-task');
-    syncEnabled.set(true);
-    TestBed.tick();
-    expect(service.currentStep()).toBeNull();
-    expect(localStorage.getItem(LS.ONBOARDING_HINTS_DONE)).toBe('true');
-  });
-
-  it('offers tracking after the first real task once the composer closes', () => {
-    const service = createService();
-    isShowAddTaskBar.set(true);
-    addFirstTask(service);
-
-    expect(service.currentStep()).toBeNull();
-    expect(localStorage.getItem(LS.ONBOARDING_PRESET_DONE)).toBe('true');
-
-    isShowAddTaskBar.set(false);
-    expect(service.currentStep()).toBe('track-offer');
-    expect(service.offerTaskId()).toBe('task-1');
-  });
-
-  it('ends guidance without an offer when tracking was turned off before', () => {
-    appFeatures.set({ ...appFeatures(), isTimeTrackingEnabled: false });
-    const service = createService();
-    addFirstTask(service);
-    expect(service.currentStep()).toBeNull();
-    expect(localStorage.getItem(LS.ONBOARDING_HINTS_DONE)).toBe('true');
-  });
-
-  it('ends guidance once tracking starts, however it was started', () => {
-    const service = createService();
-    addFirstTask(service);
-    expect(service.currentStep()).toBe('track-offer');
-
-    // Header play button, a task play button or a shortcut.
-    currentTaskId.set('task-1');
-    TestBed.tick();
-    expect(service.currentStep()).toBeNull();
-    expect(localStorage.getItem(LS.ONBOARDING_HINTS_DONE)).toBe('true');
-    expect(globalConfigService.updateSection).not.toHaveBeenCalled();
-  });
-
-  it('names the task the play button would start, not just the new one', () => {
-    const service = createService();
-    addFirstTask(service);
-    expect(service.playTargetTask()?.id).toBe('task-1');
-
-    // Another undone task sits above the new one in the current list.
-    setTasks([makeTask('other'), makeTask('task-1')]);
-    mainListTaskIds$.next(['other', 'task-1']);
-    TestBed.tick();
-    expect(service.playTargetTask()?.id).toBe('other');
-  });
-
-  it('stays quiet while play has nothing to start in the current list', () => {
-    const service = createService();
-    mainListTaskIds$.next([]);
-    addFirstTask(service);
-    expect(service.currentStep()).toBeNull();
-    expect(localStorage.getItem(LS.ONBOARDING_HINTS_DONE)).toBeNull();
-
-    mainListTaskIds$.next(['task-1']);
-    TestBed.tick();
-    expect(service.currentStep()).toBe('track-offer');
-  });
-
-  it('switches features off only when the user picks a to-do list', () => {
-    const service = createService();
-    addFirstTask(service);
-
-    service.simplifyToTodoList();
-    expect(globalConfigService.updateSection).toHaveBeenCalledOnceWith(
-      'appFeatures',
-      SIMPLE_TODO_DISABLED_FEATURES,
-      true,
-    );
-    // Never re-enables anything the user may have hidden.
-    expect(
-      Object.values(SIMPLE_TODO_DISABLED_FEATURES).every((isOn) => isOn === false),
-    ).toBeTrue();
-    expect(snackService.open).toHaveBeenCalledTimes(1);
-    expect(service.currentStep()).toBeNull();
-
-    // Undo restores exactly the switches that were changed.
-    const snackParams = snackService.open.calls.mostRecent().args[0] as unknown as {
-      actionFn: () => void;
-    };
-    snackParams.actionFn();
-    expect(globalConfigService.updateSection).toHaveBeenCalledWith(
-      'appFeatures',
-      jasmine.objectContaining({
-        isTimeTrackingEnabled: true,
-        isFocusModeEnabled: true,
-        isHabitsEnabled: true,
-      }),
-      true,
-    );
-    expect(localStorage.getItem(LS.ONBOARDING_HINTS_DONE)).toBe('true');
-  });
-
-  it('ends the offer when its task disappears', () => {
-    const service = createService();
-    addFirstTask(service);
-    setTasks([]);
-    TestBed.tick();
-    expect(service.currentStep()).toBeNull();
-    expect(localStorage.getItem(LS.ONBOARDING_HINTS_DONE)).toBe('true');
-  });
-
-  it('never auto-closes the composer on desktop layouts', () => {
-    // The phone case (touch + bottom nav) is covered by the mobile e2e spec,
-    // because touch intent cannot be simulated in the unit test browser.
-    const service = createService();
-    addFirstTask(service);
-    expect(service.shouldAutoCloseFirstTaskComposer('task-1')).toBeFalse();
-    expect(service.shouldAutoCloseFirstTaskComposer('other-task')).toBeFalse();
-  });
-
-  it('reports onboarding as finished once skipped', () => {
-    const service = createService();
-    expect(OnboardingHintService.isOnboardingInProgress()).toBeTrue();
-    service.skip();
-    expect(OnboardingHintService.isOnboardingInProgress()).toBeFalse();
-    expect(service.currentStep()).toBeNull();
+    it('reports onboarding as finished once a tip is closed', () => {
+      const service = createService();
+      expect(OnboardingHintService.isOnboardingInProgress()).toBeTrue();
+      service.skip();
+      expect(OnboardingHintService.isOnboardingInProgress()).toBeFalse();
+      expect(service.currentStep()).toBeNull();
+    });
   });
 
   describe('Inbox tip', () => {
-    const exampleTask = makeTask('example', { projectId: 'INBOX_PROJECT' });
-
-    const addFirstTaskNextToExamples = (): void => {
-      const task = makeTask('task-1');
-      setTasks([task, exampleTask]);
-      dispatchAddTask(task);
-    };
-
-    it('points at the Inbox while example tasks wait there, until it is opened', () => {
+    it('follows the first task once the composer closes, until the Inbox is opened', () => {
       const service = createService();
-      addFirstTaskNextToExamples();
-      currentTaskId.set('task-1');
-      TestBed.tick();
+      isShowAddTaskBar.set(true);
+      addFirstTask([EXAMPLE_TASK]);
+      expect(service.currentStep()).toBeNull();
+      expect(localStorage.getItem(LS.ONBOARDING_PRESET_DONE)).toBe('true');
+
+      isShowAddTaskBar.set(false);
       expect(service.currentStep()).toBe('explore-inbox');
       expect(localStorage.getItem(LS.ONBOARDING_HINTS_DONE)).toBeNull();
 
@@ -408,10 +284,7 @@ describe('OnboardingHintService', () => {
 
     it('is skipped when no example tasks are left', () => {
       const service = createService();
-      addFirstTaskNextToExamples();
-      setTasks([makeTask('task-1'), { ...exampleTask, isDone: true }]);
-      currentTaskId.set('task-1');
-      TestBed.tick();
+      addFirstTask([{ ...EXAMPLE_TASK, isDone: true }]);
       expect(service.currentStep()).toBeNull();
       expect(localStorage.getItem(LS.ONBOARDING_HINTS_DONE)).toBe('true');
     });
@@ -419,49 +292,24 @@ describe('OnboardingHintService', () => {
     it('is skipped when the examples were never seeded here', () => {
       localStorage.removeItem(LS.EXAMPLE_TASKS_CREATED);
       const service = createService();
-      addFirstTaskNextToExamples();
-      currentTaskId.set('task-1');
-      TestBed.tick();
+      addFirstTask([EXAMPLE_TASK]);
       expect(service.currentStep()).toBeNull();
     });
 
-    it('follows the swipe tips on phones', () => {
+    it('is skipped when the Inbox is already open', () => {
+      activeWorkContextId$.next('INBOX_PROJECT');
       const service = createService();
-      spyOn(service, 'isSwipeLayout').and.returnValue(true);
-      addFirstTaskNextToExamples();
-      currentTaskId.set('task-1');
-      TestBed.tick();
-      expect(service.currentStep()).toBe('task-swipe-left');
-      localActions$.next(
-        TaskSharedActions.updateTask({
-          task: { id: 'task-1', changes: { isDone: true } },
-        }),
-      );
-      TestBed.tick();
-      expect(service.currentStep()).toBe('explore-inbox');
+      addFirstTask([EXAMPLE_TASK]);
+      expect(service.currentStep()).toBeNull();
     });
   });
 
   describe('on phones', () => {
-    const createPhoneService = (): OnboardingHintService => {
-      const service = createService();
-      // Touch input cannot be simulated in the unit test browser.
-      spyOn(service, 'isSwipeLayout').and.returnValue(true);
-      return service;
-    };
-
-    const startTracking = (): void => {
-      currentTaskId.set('task-1');
-      TestBed.tick();
-    };
-
-    it('introduces swipe left after the tracking tip, then swipe right', () => {
+    it('introduces swipe left, then swipe right, then the Inbox', () => {
       const service = createPhoneService();
-      addFirstTask(service);
-      startTracking();
+      addFirstTask([EXAMPLE_TASK]);
       expect(service.currentStep()).toBe('task-swipe-left');
       expect(service.swipeTargetTaskId()).toBe('task-1');
-      expect(localStorage.getItem(LS.ONBOARDING_HINTS_DONE)).toBeNull();
 
       // Swiping left opens the task menu: hide while open, move on once closed.
       isTaskContextMenuOpen.set(true);
@@ -470,45 +318,47 @@ describe('OnboardingHintService', () => {
       isTaskContextMenuOpen.set(false);
       TestBed.tick();
       expect(service.currentStep()).toBe('task-swipe-right');
+
+      markDone();
+      expect(service.currentStep()).toBe('explore-inbox');
     });
 
-    it('also introduces swipes after choosing a to-do list', () => {
+    it('ends guidance once a task is marked done and nothing waits in the Inbox', () => {
       const service = createPhoneService();
-      addFirstTask(service);
-      service.simplifyToTodoList();
-      expect(service.currentStep()).toBe('task-swipe-left');
-    });
-
-    it('ends guidance once a task is marked done', () => {
-      const service = createPhoneService();
-      addFirstTask(service);
-      startTracking();
-      localActions$.next(
-        TaskSharedActions.updateTask({
-          task: { id: 'task-1', changes: { isDone: true } },
-        }),
-      );
-      TestBed.tick();
+      addFirstTask();
+      markDone();
       expect(service.currentStep()).toBeNull();
       expect(localStorage.getItem(LS.ONBOARDING_HINTS_DONE)).toBe('true');
     });
 
     it('hides swipe hints while a task detail panel is open', () => {
       const service = createPhoneService();
-      addFirstTask(service);
-      startTracking();
+      addFirstTask();
       selectedTaskId.set('task-1');
       expect(service.currentStep()).toBeNull();
       selectedTaskId.set(null);
       expect(service.currentStep()).toBe('task-swipe-left');
     });
 
+    it('auto-closes the composer only for the first task', () => {
+      const service = createPhoneService();
+      addFirstTask();
+      expect(service.shouldAutoCloseFirstTaskComposer('task-1')).toBeTrue();
+      expect(service.shouldAutoCloseFirstTaskComposer('task-1')).toBeFalse();
+    });
+
     it('closing a tip ends all guidance, swipes included', () => {
       const service = createPhoneService();
-      addFirstTask(service);
+      addFirstTask([EXAMPLE_TASK]);
       service.skip();
       expect(service.currentStep()).toBeNull();
       expect(localStorage.getItem(LS.ONBOARDING_HINTS_DONE)).toBe('true');
     });
+  });
+
+  it('never auto-closes the composer on desktop layouts', () => {
+    const service = createService();
+    addFirstTask();
+    expect(service.shouldAutoCloseFirstTaskComposer('task-1')).toBeFalse();
   });
 });

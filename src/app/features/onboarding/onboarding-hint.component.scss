@@ -42,13 +42,6 @@
   }
 }
 
-.hint-buttons {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--s-half);
-  margin-top: var(--s-half);
-}
-
 .shortcut-hint {
   color: var(--text-color-muted);
   font-size: 12px;

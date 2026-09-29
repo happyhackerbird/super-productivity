@@ -2,7 +2,6 @@ import { LiveAnnouncer } from '@angular/cdk/a11y';
 import {
   ChangeDetectionStrategy,
   Component,
-  computed,
   DestroyRef,
   ElementRef,
   effect,
@@ -13,7 +12,6 @@ import {
   untracked,
   viewChild,
 } from '@angular/core';
-import { MatButton } from '@angular/material/button';
 import { MatIcon } from '@angular/material/icon';
 import { TranslatePipe, TranslateService } from '@ngx-translate/core';
 import { OnboardingHintService, OnboardingStep } from './onboarding-hint.service';
@@ -21,7 +19,6 @@ import { isTouchActive } from '../../util/input-intent';
 import { GlobalConfigService } from '../config/global-config.service';
 import { LayoutService } from '../../core-ui/layout/layout.service';
 import { T } from '../../t.const';
-import { truncate } from '../../util/truncate';
 import { INBOX_PROJECT } from '../project/project.const';
 
 /** Max retries when target element is not yet in the DOM */
@@ -30,8 +27,6 @@ const POSITION_RETRY_DELAY_MS = 120;
 const HINT_GAP_PX = 12;
 /** Must match the glow spread in styles/components/onboarding-pulse.scss */
 const PULSE_GLOW_PX = 8;
-/** Keeps the offer to about two lines in the 260px chip */
-const MAX_TITLE_LENGTH = 32;
 
 const UNDONE_TASK_ROW_SELECTOR = 'task-list .task-list-inner > task:not(.isDone)';
 
@@ -60,17 +55,6 @@ const STEP_CONFIGS = new Map<OnboardingStep, StepConfig>([
       message: T.ONBOARDING.HINTS.CREATE_TASK,
       touchMessage: T.ONBOARDING.HINTS.CREATE_TASK_TOUCH,
       showShortcut: true,
-      isPulse: true,
-    },
-  ],
-  [
-    'track-offer',
-    {
-      // The existing header play button; disabled when nothing here can be tracked.
-      selector: () => '.tour-playBtn:not(:disabled)',
-      message: T.ONBOARDING.HINTS.TRACK_OFFER,
-      touchMessage: T.ONBOARDING.HINTS.TRACK_OFFER_TOUCH,
-      showShortcut: false,
       isPulse: true,
     },
   ],
@@ -131,7 +115,7 @@ interface HintPosition {
 @Component({
   selector: 'onboarding-hint',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [TranslatePipe, MatButton, MatIcon],
+  imports: [TranslatePipe, MatIcon],
   templateUrl: './onboarding-hint.component.html',
   styleUrl: './onboarding-hint.component.scss',
 })
@@ -141,10 +125,6 @@ export class OnboardingHintComponent {
   hintPosition = signal<HintPosition | null>(null);
   hintMessage = signal<string>('');
   hintIcon = signal<string | null>(null);
-  readonly hintMessageParams = computed(() => {
-    const step = this.onboardingHintService.currentStep();
-    return step ? this._getMessageParams(step) : {};
-  });
   shortcutHint = signal<string | null>(null);
 
   private _globalConfigService = inject(GlobalConfigService);
@@ -222,10 +202,6 @@ export class OnboardingHintComponent {
     this.onboardingHintService.skip();
   }
 
-  simplify(): void {
-    this.onboardingHintService.simplifyToTodoList();
-  }
-
   private _announce(step: OnboardingStep): void {
     const config = STEP_CONFIGS.get(step);
     if (!config) {
@@ -234,22 +210,7 @@ export class OnboardingHintComponent {
     const key = isTouchActive()
       ? (config.touchMessage ?? config.message)
       : config.message;
-    void this._liveAnnouncer.announce(
-      this._translateService.instant(key, this._getMessageParams(step)),
-    );
-  }
-
-  private _getMessageParams(step: OnboardingStep): Record<string, string> {
-    if (step !== 'track-offer') {
-      return {};
-    }
-    // Exactly the task the play button would start, kept live if it changes.
-    return {
-      title: truncate(
-        this.onboardingHintService.playTargetTask()?.title ?? '',
-        MAX_TITLE_LENGTH,
-      ),
-    };
+    void this._liveAnnouncer.announce(this._translateService.instant(key));
   }
 
   /** Re-anchor on scroll/resize, or attach once the target appears. */
@@ -328,7 +289,7 @@ export class OnboardingHintComponent {
       return false;
     }
 
-    this._updateMessage(config, step);
+    this._updateMessage(config);
 
     const targetEl = this._resolveTarget(config);
     if (!targetEl) {
@@ -361,7 +322,7 @@ export class OnboardingHintComponent {
     return true;
   }
 
-  private _updateMessage(config: StepConfig, step: OnboardingStep): void {
+  private _updateMessage(config: StepConfig): void {
     this.hintMessage.set(
       isTouchActive() ? (config.touchMessage ?? config.message) : config.message,
     );
@@ -380,7 +341,7 @@ export class OnboardingHintComponent {
     const hintWidth = 260;
     // Prefer the rendered height: an estimate that is too small makes a hint
     // placed above its target (e.g. the mobile + button) cover it.
-    const estimatedHintHeight = step === 'track-offer' ? 96 : isTouchActive() ? 76 : 48;
+    const estimatedHintHeight = isTouchActive() ? 76 : 48;
     const hintHeight = this._measureHintHeight() ?? estimatedHintHeight;
     // Clear the target's pulse glow (8px box-shadow ring) and the hint's arrow.
     const gap = STEP_CONFIGS.get(step)?.isPulse

@@ -11,25 +11,21 @@ const pixel5TestOptions = { ...devices['Pixel 5'] };
 // Browser type is worker-scoped and cannot be overridden inside a describe block.
 Reflect.deleteProperty(pixel5TestOptions, 'defaultBrowserType');
 
-const TRACK_OFFER = /play to track time on “.+”/;
+const INBOX_TIP = 'A few tips are waiting in your Inbox.';
+const INBOX_NAV_ITEM =
+  'magic-side-nav nav-item[data-project-id="INBOX_PROJECT"] .nav-link';
 
-const openFreshApp = async (page: Page): Promise<void> => {
-  await page.addInitScript(() => {
-    localStorage.setItem('SUP_EXAMPLE_TASKS_CREATED', 'true');
-  });
+/** First run; `withExamples: false` skips seeding the Inbox example tasks. */
+const openFreshApp = async (
+  page: Page,
+  { withExamples }: { withExamples: boolean },
+): Promise<void> => {
+  if (!withExamples) {
+    await page.addInitScript(() => {
+      localStorage.setItem('SUP_EXAMPLE_TASKS_CREATED', 'true');
+    });
+  }
   await page.goto('/');
-  await expect(page.locator('onboarding-hint')).toContainText(
-    'Click + to add your first task',
-  );
-};
-
-const expectHintBelow = async (page: Page, targetSelector: string): Promise<void> => {
-  const target = await page.locator(targetSelector).boundingBox();
-  const chip = await page.locator('onboarding-hint .hint-chip').boundingBox();
-  expect(target && chip).toBeTruthy();
-  // Attached right under the target, never covering it.
-  expect(chip!.y).toBeGreaterThanOrEqual(target!.y + target!.height);
-  expect(chip!.y - (target!.y + target!.height)).toBeLessThan(30);
 };
 
 const addTaskViaComposer = async (page: Page, title: string): Promise<void> => {
@@ -44,93 +40,22 @@ const addTaskViaComposer = async (page: Page, title: string): Promise<void> => {
 };
 
 test.describe('First-run onboarding', () => {
-  test('points at the existing play button after the first task', async ({
-    isolatedContext,
-  }) => {
+  test('a new install starts with a calm feature set', async ({ isolatedContext }) => {
     const page = await isolatedContext.newPage();
-    const runtimeErrors = attachPageErrorCollector(page, 'onboarding start');
-    installDevErrorDialogHandler(page, 'onboarding start');
-    await openFreshApp(page);
+    const runtimeErrors = attachPageErrorCollector(page, 'onboarding defaults');
+    installDevErrorDialogHandler(page, 'onboarding defaults');
+    await openFreshApp(page, { withExamples: false });
+    await expect(page.locator('onboarding-hint')).toContainText(
+      'Click + to add your first task',
+    );
 
-    const taskTitle = `Tracked first task ${Date.now()}`;
-    await addTaskViaComposer(page, taskTitle);
-
-    const hint = page.locator('onboarding-hint');
-    await expect(hint).toContainText(TRACK_OFFER);
-    await expect
-      .poll(() => expectHintBelow(page, '.tour-playBtn').then(() => true))
-      .toBe(true);
-
-    await expect(hint).toContainText(`Click play to track time on “${taskTitle}”.`);
-
-    // The real play button starts exactly the named task and ends guidance.
-    await page.locator('.tour-playBtn').click();
-    const task = page.locator('task').filter({ hasText: taskTitle }).first();
-    await expect(task).toHaveClass(/isCurrent/);
-    await expect(hint).toHaveCount(0);
-
-    await waitForStatePersistence(page);
-    await page.reload();
-    await expect(page.locator('task').filter({ hasText: taskTitle })).toBeVisible();
-    await expect(page.locator('onboarding-hint')).toHaveCount(0);
-    assertNoRuntimeBrowserErrors(runtimeErrors, 'onboarding start');
-    await page.close();
-  });
-
-  test('simplifies to a to-do list only on explicit choice', async ({
-    isolatedContext,
-  }) => {
-    const page = await isolatedContext.newPage();
-    const runtimeErrors = attachPageErrorCollector(page, 'onboarding simplify');
-    installDevErrorDialogHandler(page, 'onboarding simplify');
-    await openFreshApp(page);
-
-    // Tracking is available before any choice.
+    const sideNav = page.locator('magic-side-nav');
+    await expect(sideNav.getByText('Planner', { exact: true })).toBeVisible();
     await expect(page.locator('.tour-playBtn')).toBeVisible();
-
-    const taskTitle = `Simple first task ${Date.now()}`;
-    await addTaskViaComposer(page, taskTitle);
-
-    const hint = page.locator('onboarding-hint');
-    await expect(hint).toContainText(TRACK_OFFER);
-    await hint.getByRole('button', { name: 'I only need a to-do list' }).click();
-
-    await expect(hint).toHaveCount(0);
-    await expect(page.locator('.tour-playBtn')).toHaveCount(0);
-    const task = page.locator('task').filter({ hasText: taskTitle }).first();
-    await task.hover();
-    await expect(task.locator('.start-task-btn')).toHaveCount(0);
-
-    await waitForStatePersistence(page);
-    await page.reload();
-    await expect(page.locator('task').filter({ hasText: taskTitle })).toBeVisible();
-    await expect(page.locator('onboarding-hint')).toHaveCount(0);
-    await expect(page.locator('.tour-playBtn')).toHaveCount(0);
-    assertNoRuntimeBrowserErrors(runtimeErrors, 'onboarding simplify');
-    await page.close();
-  });
-
-  test('dismissing the offer changes no settings and does not ask again', async ({
-    isolatedContext,
-  }) => {
-    const page = await isolatedContext.newPage();
-    const runtimeErrors = attachPageErrorCollector(page, 'onboarding dismiss');
-    installDevErrorDialogHandler(page, 'onboarding dismiss');
-    await openFreshApp(page);
-
-    await addTaskViaComposer(page, `Dismissed first task ${Date.now()}`);
-    const hint = page.locator('onboarding-hint');
-    await expect(hint).toContainText(TRACK_OFFER);
-    // Focus returns to + after the composer closes; move it so the + tooltip
-    // does not sit on top of the hint's close button.
-    await page.mouse.click(640, 600);
-    await hint.getByRole('button', { name: 'Close tip' }).click();
-    await expect(hint).toHaveCount(0);
-    await expect(page.locator('.tour-playBtn')).toBeVisible();
-
-    await addTaskViaComposer(page, `Second task ${Date.now()}`);
-    await expect(page.locator('onboarding-hint')).toHaveCount(0);
-    assertNoRuntimeBrowserErrors(runtimeErrors, 'onboarding dismiss');
+    for (const hidden of ['Schedule', 'Boards', 'Habits']) {
+      await expect(sideNav.getByText(hidden, { exact: true })).toHaveCount(0);
+    }
+    assertNoRuntimeBrowserErrors(runtimeErrors, 'onboarding defaults');
     await page.close();
   });
 
@@ -140,21 +65,16 @@ test.describe('First-run onboarding', () => {
     const page = await isolatedContext.newPage();
     const runtimeErrors = attachPageErrorCollector(page, 'onboarding inbox');
     installDevErrorDialogHandler(page, 'onboarding inbox');
-    // Real first run: example tasks get seeded into the Inbox.
-    await page.goto('/');
+    await openFreshApp(page, { withExamples: true });
     await expect(page.locator('onboarding-hint')).toContainText(
       'Click + to add your first task',
     );
 
     await addTaskViaComposer(page, `Inbox tip task ${Date.now()}`);
-    await expect(page.locator('onboarding-hint')).toContainText(TRACK_OFFER);
-    await page.locator('.tour-playBtn').click();
 
     const hint = page.locator('onboarding-hint');
-    await expect(hint).toContainText('A few tips are waiting in your Inbox.');
-    const inboxNavItem = page.locator(
-      'magic-side-nav nav-item[data-project-id="INBOX_PROJECT"] .nav-link',
-    );
+    await expect(hint).toContainText(INBOX_TIP);
+    const inboxNavItem = page.locator(INBOX_NAV_ITEM);
     await expect
       .poll(async () => {
         const target = await inboxNavItem.boundingBox();
@@ -165,25 +85,78 @@ test.describe('First-run onboarding', () => {
 
     await inboxNavItem.click();
     await expect(hint).toHaveCount(0);
-    await expect(page.locator('task').filter({ hasText: 'Set up Sync' })).toBeVisible();
+    await expect(page.locator('task').filter({ hasText: 'Go further' })).toBeVisible();
     assertNoRuntimeBrowserErrors(runtimeErrors, 'onboarding inbox');
     await page.close();
   });
 
-  test('reloading before answering counts as dismissal', async ({ isolatedContext }) => {
+  test('closing the Inbox tip ends guidance for good', async ({ isolatedContext }) => {
     const page = await isolatedContext.newPage();
-    const runtimeErrors = attachPageErrorCollector(page, 'onboarding reload');
-    installDevErrorDialogHandler(page, 'onboarding reload');
-    await openFreshApp(page);
+    const runtimeErrors = attachPageErrorCollector(page, 'onboarding dismiss');
+    installDevErrorDialogHandler(page, 'onboarding dismiss');
+    await openFreshApp(page, { withExamples: true });
+    await expect(page.locator('onboarding-hint')).toBeAttached();
 
-    await addTaskViaComposer(page, `Reloaded first task ${Date.now()}`);
-    await expect(page.locator('onboarding-hint')).toContainText(TRACK_OFFER);
+    await addTaskViaComposer(page, `Dismissed tip task ${Date.now()}`);
+    const hint = page.locator('onboarding-hint');
+    await expect(hint).toContainText(INBOX_TIP);
+    // Focus returns to + after the composer closes; move it so the + tooltip
+    // does not sit on top of the hint's close button.
+    await page.mouse.click(640, 600);
+    await hint.getByRole('button', { name: 'Close tip' }).click();
+    await expect(hint).toHaveCount(0);
 
     await waitForStatePersistence(page);
     await page.reload();
     await expect(page.locator('task-list').first()).toBeVisible();
     await expect(page.locator('onboarding-hint')).toHaveCount(0);
-    await expect(page.locator('.tour-playBtn')).toBeVisible();
+    assertNoRuntimeBrowserErrors(runtimeErrors, 'onboarding dismiss');
+    await page.close();
+  });
+
+  test('time tracking can be switched off from the play button', async ({
+    isolatedContext,
+  }) => {
+    const page = await isolatedContext.newPage();
+    const runtimeErrors = attachPageErrorCollector(page, 'disable tracking');
+    installDevErrorDialogHandler(page, 'disable tracking');
+    await openFreshApp(page, { withExamples: false });
+    // The play button stays disabled (and inert) until there is something to track.
+    await addTaskViaComposer(page, `Tracking off task ${Date.now()}`);
+
+    const playBtn = page.locator('.tour-playBtn');
+    await playBtn.click({ button: 'right' });
+    await page.getByRole('menuitem', { name: 'Disable feature' }).click();
+    await expect(playBtn).toHaveCount(0);
+
+    await waitForStatePersistence(page);
+    await page.reload();
+    await expect(page.locator('task-list').first()).toBeVisible();
+    await expect(page.locator('.tour-playBtn')).toHaveCount(0);
+    assertNoRuntimeBrowserErrors(runtimeErrors, 'disable tracking');
+    await page.close();
+  });
+
+  test('reloading after the first task does not start over', async ({
+    isolatedContext,
+  }) => {
+    const page = await isolatedContext.newPage();
+    const runtimeErrors = attachPageErrorCollector(page, 'onboarding reload');
+    installDevErrorDialogHandler(page, 'onboarding reload');
+    await openFreshApp(page, { withExamples: true });
+    await expect(page.locator('onboarding-hint')).toBeAttached();
+
+    await addTaskViaComposer(page, `Reloaded first task ${Date.now()}`);
+    await expect(page.locator('onboarding-hint')).toContainText(INBOX_TIP);
+
+    await waitForStatePersistence(page);
+    await page.reload();
+    await expect(page.locator('task-list').first()).toBeVisible();
+    await expect(page.locator('onboarding-hint')).toHaveCount(0);
+    // The calm defaults survive the reload.
+    await expect(
+      page.locator('magic-side-nav').getByText('Boards', { exact: true }),
+    ).toHaveCount(0);
     assertNoRuntimeBrowserErrors(runtimeErrors, 'onboarding reload');
     await page.close();
   });
@@ -191,18 +164,14 @@ test.describe('First-run onboarding', () => {
   test.describe('mobile', () => {
     test.use(pixel5TestOptions);
 
-    test('keeps + uncovered and points at play after the first task', async ({
+    test('keeps + uncovered, then teaches the swipe gestures', async ({
       isolatedContext,
     }) => {
       const page = await isolatedContext.newPage();
       const runtimeErrors = attachPageErrorCollector(page, 'mobile onboarding');
       installDevErrorDialogHandler(page, 'mobile onboarding');
 
-      await page.addInitScript(() => {
-        localStorage.setItem('SUP_EXAMPLE_TASKS_CREATED', 'true');
-      });
-
-      await page.goto('/');
+      await openFreshApp(page, { withExamples: false });
       const userAgent = await page.evaluate(() => navigator.userAgent);
       expect(userAgent).toContain('Pixel 5');
       expect(userAgent).toContain('PLAYWRIGHT-WORKER-');
@@ -226,19 +195,18 @@ test.describe('First-run onboarding', () => {
 
       await expect(page.locator('add-task-bar.global')).toBeHidden();
       const hint = page.locator('onboarding-hint');
-      await expect(hint).toContainText(
-        'Tap play to track time on “My first mobile task”.',
-      );
-      await page.locator('.tour-playBtn').tap();
+      await expect(hint).toContainText('Swipe task left for more actions');
       const task = page
         .locator('task')
         .filter({ hasText: 'My first mobile task' })
         .first();
-      await expect(task).toHaveClass(/isCurrent/);
-
-      // Phones then learn the task gestures, pointed at the task row.
-      await expect(hint).toContainText('Swipe task left for more actions');
-      await expect.poll(() => expectHintBelow(page, 'task').then(() => true)).toBe(true);
+      await expect
+        .poll(async () => {
+          const target = await task.boundingBox();
+          const chip = await hint.locator('.hint-chip').boundingBox();
+          return !!target && !!chip && chip.y >= target.y + target.height;
+        })
+        .toBe(true);
 
       // Marking the task done (swipe right or checkbox) completes guidance.
       await task.locator('done-toggle').tap();
@@ -254,11 +222,7 @@ test.describe('First-run onboarding', () => {
       const runtimeErrors = attachPageErrorCollector(page, 'hybrid onboarding');
       installDevErrorDialogHandler(page, 'hybrid onboarding');
 
-      await page.addInitScript(() => {
-        localStorage.setItem('SUP_EXAMPLE_TASKS_CREATED', 'true');
-      });
-
-      await page.goto('/');
+      await openFreshApp(page, { withExamples: false });
       await expect(page.locator('onboarding-hint')).toContainText(
         'Tap + to add your first task',
       );

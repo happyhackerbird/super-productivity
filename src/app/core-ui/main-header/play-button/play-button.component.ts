@@ -13,8 +13,11 @@ import {
 } from '@angular/core';
 import { MatMiniFabButton } from '@angular/material/button';
 import { MatIcon } from '@angular/material/icon';
+import { MatMenu, MatMenuItem, MatMenuTrigger } from '@angular/material/menu';
 import { MatTooltip } from '@angular/material/tooltip';
-import { TranslatePipe } from '@ngx-translate/core';
+import { TranslatePipe, TranslateService } from '@ngx-translate/core';
+import { LongPressDirective } from '../../../ui/longpress/longpress.directive';
+import { MagicNavConfigService } from '../../magic-side-nav/magic-nav-config.service';
 import { T } from '../../../t.const';
 import { TaskService } from '../../../features/tasks/task.service';
 import { animationFrameScheduler, Subscription } from 'rxjs';
@@ -23,7 +26,16 @@ import { distinctUntilChanged, observeOn } from 'rxjs/operators';
 @Component({
   selector: 'play-button',
   standalone: true,
-  imports: [MatMiniFabButton, MatIcon, MatTooltip, TranslatePipe],
+  imports: [
+    MatMiniFabButton,
+    MatIcon,
+    MatTooltip,
+    TranslatePipe,
+    MatMenu,
+    MatMenuItem,
+    MatMenuTrigger,
+    LongPressDirective,
+  ],
   template: `
     <div class="play-btn-wrapper">
       @if (currentTaskId()) {
@@ -52,7 +64,9 @@ import { distinctUntilChanged, observeOn } from 'rxjs/operators';
       }
 
       <button
-        (click)="taskService.toggleStartTask()"
+        (click)="onPlayClick()"
+        (contextmenu)="$event.preventDefault(); openFeatureMenu()"
+        (longPress)="onLongPress()"
         [color]="currentTaskId() ? 'accent' : 'primary'"
         [matTooltip]="tooltipText() | translate"
         [attr.aria-label]="tooltipText() | translate"
@@ -67,6 +81,21 @@ import { distinctUntilChanged, observeOn } from 'rxjs/operators';
           <mat-icon>pause</mat-icon>
         }
       </button>
+
+      <!-- Anchor only: opened from right-click / long-press on the button -->
+      <span
+        class="feature-menu-anchor"
+        [matMenuTriggerFor]="featureMenu"
+      ></span>
+      <mat-menu #featureMenu="matMenu">
+        <button
+          mat-menu-item
+          (click)="disableTimeTracking()"
+        >
+          <mat-icon>visibility_off</mat-icon>
+          <span>{{ T.MH.DISABLE_FEATURE | translate }}</span>
+        </button>
+      </mat-menu>
     </div>
   `,
   styles: [
@@ -123,6 +152,15 @@ import { distinctUntilChanged, observeOn } from 'rxjs/operators';
           z-index: 3;
         }
 
+        .feature-menu-anchor {
+          position: absolute;
+          left: 50%;
+          bottom: 0;
+          width: 0;
+          height: 0;
+          pointer-events: none;
+        }
+
         .play-btn {
           position: relative;
           margin-left: 0;
@@ -147,6 +185,9 @@ import { distinctUntilChanged, observeOn } from 'rxjs/operators';
 export class PlayButtonComponent implements OnInit, OnDestroy {
   private _renderer = inject(Renderer2);
   private _cd = inject(ChangeDetectorRef);
+  private _navConfigService = inject(MagicNavConfigService);
+  private _translateService = inject(TranslateService);
+  private _isLongPressClick = false;
 
   readonly T = T;
   readonly taskService = inject(TaskService);
@@ -154,6 +195,7 @@ export class PlayButtonComponent implements OnInit, OnDestroy {
   readonly currentTaskId = input<string | null>();
   readonly hasTrackableTasks = input<boolean>(true);
   readonly circleSvg = viewChild<ElementRef<SVGCircleElement>>('circleSvg');
+  readonly featureMenuTrigger = viewChild(MatMenuTrigger);
 
   readonly isDisabled = computed(
     () => !this.currentTaskId() && !this.hasTrackableTasks(),
@@ -165,6 +207,32 @@ export class PlayButtonComponent implements OnInit, OnDestroy {
   private _subs = new Subscription();
   private circumference = 10 * 2 * Math.PI; // ~62.83
   protected hasTimeEstimate = false;
+
+  onPlayClick(): void {
+    // The click that ends a long press must not also start or stop tracking.
+    if (this._isLongPressClick) {
+      this._isLongPressClick = false;
+      return;
+    }
+    this.taskService.toggleStartTask();
+  }
+
+  onLongPress(): void {
+    this._isLongPressClick = true;
+    this.openFeatureMenu();
+  }
+
+  /** Same "Disable feature" as the side nav items offer for their features. */
+  openFeatureMenu(): void {
+    this.featureMenuTrigger()?.openMenu();
+  }
+
+  disableTimeTracking(): void {
+    this._navConfigService.disableFeature(
+      'isTimeTrackingEnabled',
+      this._translateService.instant(T.GCF.APP_FEATURES.TIME_TRACKING),
+    );
+  }
 
   ngOnInit(): void {
     // Subscribe to current task to track if it has a time estimate

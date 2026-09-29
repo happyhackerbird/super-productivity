@@ -1,5 +1,4 @@
 @if (hintPosition(); as pos) {
-  @let step = onboardingHintService.currentStep();
   <div
     class="hint-container"
     [style.top.px]="pos.top"
@@ -21,25 +20,13 @@
             @if (hintIcon(); as icon) {
               <mat-icon aria-hidden="true">{{ icon }}</mat-icon>
             }
-            <span>{{ hintMessage() | translate: hintMessageParams() }}</span>
+            <span>{{ hintMessage() | translate }}</span>
           </div>
         }
         @if (shortcutHint(); as shortcut) {
           <span class="shortcut-hint">
             {{ T.ONBOARDING.HINTS.OR_PRESS | translate }} <kbd>{{ shortcut }}</kbd>
           </span>
-        }
-        @if (step === 'track-offer') {
-          <div class="hint-buttons">
-            <button
-              mat-button
-              type="button"
-              class="e2e-onboarding-simplify"
-              (click)="simplify()"
-            >
-              {{ T.ONBOARDING.HINTS.SIMPLIFY | translate }}
-            </button>
-          </div>
         }
       </div>
       <button
