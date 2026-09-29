@@ -134,6 +134,42 @@ test.describe('First-run onboarding', () => {
     await page.close();
   });
 
+  test('ends by pointing at the Inbox, where the example tasks wait', async ({
+    isolatedContext,
+  }) => {
+    const page = await isolatedContext.newPage();
+    const runtimeErrors = attachPageErrorCollector(page, 'onboarding inbox');
+    installDevErrorDialogHandler(page, 'onboarding inbox');
+    // Real first run: example tasks get seeded into the Inbox.
+    await page.goto('/');
+    await expect(page.locator('onboarding-hint')).toContainText(
+      'Click + to add your first task',
+    );
+
+    await addTaskViaComposer(page, `Inbox tip task ${Date.now()}`);
+    await expect(page.locator('onboarding-hint')).toContainText(TRACK_OFFER);
+    await page.locator('.tour-playBtn').click();
+
+    const hint = page.locator('onboarding-hint');
+    await expect(hint).toContainText('A few tips are waiting in your Inbox.');
+    const inboxNavItem = page.locator(
+      'magic-side-nav nav-item[data-project-id="INBOX_PROJECT"] .nav-link',
+    );
+    await expect
+      .poll(async () => {
+        const target = await inboxNavItem.boundingBox();
+        const chip = await hint.locator('.hint-chip').boundingBox();
+        return !!target && !!chip && chip.y > target.y + target.height;
+      })
+      .toBe(true);
+
+    await inboxNavItem.click();
+    await expect(hint).toHaveCount(0);
+    await expect(page.locator('task').filter({ hasText: 'Set up Sync' })).toBeVisible();
+    assertNoRuntimeBrowserErrors(runtimeErrors, 'onboarding inbox');
+    await page.close();
+  });
+
   test('reloading before answering counts as dismissal', async ({ isolatedContext }) => {
     const page = await isolatedContext.newPage();
     const runtimeErrors = attachPageErrorCollector(page, 'onboarding reload');

@@ -54,6 +54,7 @@ describe('OnboardingHintService', () => {
   let localActions$: Subject<Action>;
   let dataLoaded$: BehaviorSubject<boolean> | Subject<boolean>;
   let mainListTaskIds$: BehaviorSubject<string[]>;
+  let activeWorkContextId$: BehaviorSubject<string | null>;
   let savedLs: Record<string, string | null>;
 
   const setTasks = (tasks: Task[], lastCurrentTaskId: string | null = null): void => {
@@ -121,6 +122,7 @@ describe('OnboardingHintService', () => {
     localActions$ = new Subject<Action>();
     dataLoaded$ = new BehaviorSubject(true);
     mainListTaskIds$ = new BehaviorSubject<string[]>(['task-1']);
+    activeWorkContextId$ = new BehaviorSubject<string | null>('TODAY');
 
     TestBed.configureTestingModule({
       providers: [
@@ -143,7 +145,10 @@ describe('OnboardingHintService', () => {
         { provide: TaskService, useValue: taskService },
         { provide: SnackService, useValue: snackService },
         { provide: LOCAL_ACTIONS, useValue: localActions$ },
-        { provide: WorkContextService, useValue: { mainListTaskIds$ } },
+        {
+          provide: WorkContextService,
+          useValue: { mainListTaskIds$, activeWorkContextId$ },
+        },
         { provide: TaskFocusService, useValue: { isTaskContextMenuOpen } },
       ],
     });
@@ -376,6 +381,65 @@ describe('OnboardingHintService', () => {
     service.skip();
     expect(OnboardingHintService.isOnboardingInProgress()).toBeFalse();
     expect(service.currentStep()).toBeNull();
+  });
+
+  describe('Inbox tip', () => {
+    const exampleTask = makeTask('example', { projectId: 'INBOX_PROJECT' });
+
+    const addFirstTaskNextToExamples = (): void => {
+      const task = makeTask('task-1');
+      setTasks([task, exampleTask]);
+      dispatchAddTask(task);
+    };
+
+    it('points at the Inbox while example tasks wait there, until it is opened', () => {
+      const service = createService();
+      addFirstTaskNextToExamples();
+      currentTaskId.set('task-1');
+      TestBed.tick();
+      expect(service.currentStep()).toBe('explore-inbox');
+      expect(localStorage.getItem(LS.ONBOARDING_HINTS_DONE)).toBeNull();
+
+      activeWorkContextId$.next('INBOX_PROJECT');
+      TestBed.tick();
+      expect(service.currentStep()).toBeNull();
+      expect(localStorage.getItem(LS.ONBOARDING_HINTS_DONE)).toBe('true');
+    });
+
+    it('is skipped when no example tasks are left', () => {
+      const service = createService();
+      addFirstTaskNextToExamples();
+      setTasks([makeTask('task-1'), { ...exampleTask, isDone: true }]);
+      currentTaskId.set('task-1');
+      TestBed.tick();
+      expect(service.currentStep()).toBeNull();
+      expect(localStorage.getItem(LS.ONBOARDING_HINTS_DONE)).toBe('true');
+    });
+
+    it('is skipped when the examples were never seeded here', () => {
+      localStorage.removeItem(LS.EXAMPLE_TASKS_CREATED);
+      const service = createService();
+      addFirstTaskNextToExamples();
+      currentTaskId.set('task-1');
+      TestBed.tick();
+      expect(service.currentStep()).toBeNull();
+    });
+
+    it('follows the swipe tips on phones', () => {
+      const service = createService();
+      spyOn(service, 'isSwipeLayout').and.returnValue(true);
+      addFirstTaskNextToExamples();
+      currentTaskId.set('task-1');
+      TestBed.tick();
+      expect(service.currentStep()).toBe('task-swipe-left');
+      localActions$.next(
+        TaskSharedActions.updateTask({
+          task: { id: 'task-1', changes: { isDone: true } },
+        }),
+      );
+      TestBed.tick();
+      expect(service.currentStep()).toBe('explore-inbox');
+    });
   });
 
   describe('on phones', () => {

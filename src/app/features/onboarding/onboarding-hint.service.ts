@@ -20,20 +20,23 @@ import { TaskFocusService } from '../tasks/task-focus.service';
 import { selectTaskFeatureState } from '../tasks/store/task.selectors';
 import { findTaskToStart } from '../tasks/util/find-task-to-start';
 import { WorkContextService } from '../work-context/work-context.service';
+import { INBOX_PROJECT } from '../project/project.const';
 import { SIMPLE_TODO_DISABLED_FEATURES } from './onboarding-presets.const';
 
 export type OnboardingStep =
   | 'create-task'
   | 'track-offer'
   | 'task-swipe-left'
-  | 'task-swipe-right';
+  | 'task-swipe-right'
+  | 'explore-inbox';
 
 type OnboardingPhase =
   | 'idle'
   | 'await-first-task'
   | 'track-offer'
   | 'task-swipe-left'
-  | 'task-swipe-right';
+  | 'task-swipe-right'
+  | 'explore-inbox';
 
 /** Undo for "I only need a to-do list" must stay reachable (WCAG 2.2.1). */
 const SIMPLIFIED_SNACK_DURATION_MS = 10000;
@@ -55,6 +58,8 @@ const RETURNING_USER_MIN_PROJECTS = 3;
  * 3. Phones only: on the task row, "swipe left for more actions" (advances once
  *    the task menu was opened and closed), then "swipe right to mark it as done"
  *    (ends once a task is marked done).
+ * 4. If the seeded example tasks are still in the Inbox, point at the Inbox once
+ *    (ends when the Inbox is opened). Otherwise they are easy to never find.
  *
  * No step advances on a timer. Reloading after the first task ends guidance.
  */
@@ -78,8 +83,12 @@ export class OnboardingHintService {
   private _taskDoneSub: Subscription | null = null;
   private _taskState = this._store.selectSignal(selectTaskFeatureState);
   private _taskEntities = computed(() => this._taskState().entities);
-  private _mainListTaskIds = toSignal(inject(WorkContextService).mainListTaskIds$, {
+  private _workContextService = inject(WorkContextService);
+  private _mainListTaskIds = toSignal(this._workContextService.mainListTaskIds$, {
     initialValue: [] as string[],
+  });
+  private _activeWorkContextId = toSignal(this._workContextService.activeWorkContextId$, {
+    initialValue: null,
   });
 
   readonly offerTaskId = signal<string | null>(null);
@@ -115,6 +124,9 @@ export class OnboardingHintService {
     }
     if (phase === 'await-first-task') {
       return 'create-task';
+    }
+    if (phase === 'explore-inbox') {
+      return 'explore-inbox';
     }
     // Nothing play could start here (e.g. the task went to another list): stay quiet.
     if (phase === 'track-offer' && this.offerTask() && this.playTargetTask()) {
@@ -163,6 +175,16 @@ export class OnboardingHintService {
       }
     });
 
+    // The Inbox tip is done once the Inbox is open.
+    effect(() => {
+      if (
+        this._phase() === 'explore-inbox' &&
+        this._activeWorkContextId() === INBOX_PROJECT.id
+      ) {
+        untracked(() => this._markDone());
+      }
+    });
+
     // A returning user who sets up sync needs no new-user guidance.
     effect(() => {
       if (this._globalConfigService.sync()?.isEnabled) {
@@ -208,7 +230,7 @@ export class OnboardingHintService {
       .subscribe(() => {
         const phase = this._phase();
         if (phase === 'task-swipe-left' || phase === 'task-swipe-right') {
-          this._markDone();
+          this._advanceToExplore();
         }
       });
   }
@@ -294,6 +316,26 @@ export class OnboardingHintService {
     if (this.isSwipeLayout()) {
       this._wasTaskMenuOpened = false;
       this._phase.set('task-swipe-left');
+    } else {
+      this._advanceToExplore();
+    }
+  }
+
+  /** Point at the Inbox only while the seeded example tasks are still there. */
+  private _advanceToExplore(): void {
+    const offerTaskId = this.offerTaskId();
+    const hasExampleTasksInInbox =
+      !!localStorage.getItem(LS.EXAMPLE_TASKS_CREATED) &&
+      Object.values(this._taskEntities()).some(
+        (task) =>
+          !!task &&
+          task.projectId === INBOX_PROJECT.id &&
+          task.id !== offerTaskId &&
+          !task.parentId &&
+          !task.isDone,
+      );
+    if (hasExampleTasksInInbox && this._activeWorkContextId() !== INBOX_PROJECT.id) {
+      this._phase.set('explore-inbox');
     } else {
       this._markDone();
     }

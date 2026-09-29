@@ -22,6 +22,7 @@ import { GlobalConfigService } from '../config/global-config.service';
 import { LayoutService } from '../../core-ui/layout/layout.service';
 import { T } from '../../t.const';
 import { truncate } from '../../util/truncate';
+import { INBOX_PROJECT } from '../project/project.const';
 
 /** Max retries when target element is not yet in the DOM */
 const MAX_POSITION_RETRIES = 10;
@@ -40,7 +41,8 @@ const swipeTargetSelector = (swipeTargetTaskId: string | null): string =>
     : UNDONE_TASK_ROW_SELECTOR;
 
 interface StepConfig {
-  selector: (isMobile: boolean, swipeTargetTaskId: string | null) => string;
+  /** Candidate targets in order of preference; the first visible one is used. */
+  selector: (isMobile: boolean, swipeTargetTaskId: string | null) => string | string[];
   message: string;
   touchMessage?: string;
   /** Gesture icon shown before the message */
@@ -93,7 +95,31 @@ const STEP_CONFIGS = new Map<OnboardingStep, StepConfig>([
       isPulse: false,
     },
   ],
+  [
+    'explore-inbox',
+    {
+      // The Inbox entry in the side nav; on phones the menu button that opens it,
+      // until the menu is open and the entry itself is visible.
+      selector: () => [
+        `magic-side-nav nav-item[data-project-id="${INBOX_PROJECT.id}"] .nav-link`,
+        'mobile-bottom-nav nav > button:last-of-type',
+      ],
+      message: T.ONBOARDING.HINTS.EXPLORE_INBOX,
+      showShortcut: false,
+      isPulse: false,
+    },
+  ],
 ]);
+
+const isVisible = (el: HTMLElement): boolean => {
+  const rect = el.getBoundingClientRect();
+  return (
+    rect.width > 0 &&
+    rect.height > 0 &&
+    (typeof el.checkVisibility !== 'function' ||
+      el.checkVisibility({ opacityProperty: true, visibilityProperty: true }))
+  );
+};
 
 interface HintPosition {
   top: number;
@@ -237,12 +263,30 @@ export class OnboardingHintComponent {
       if (!step) {
         return;
       }
-      if (this._targetEl?.isConnected) {
-        this._calculatePosition(this._targetEl, step);
-      } else {
+      // Re-resolve: a better target may have appeared (e.g. the opened side nav).
+      const config = STEP_CONFIGS.get(step);
+      const targetEl = config ? this._resolveTarget(config) : null;
+      if (targetEl && targetEl === this._targetEl) {
+        this._calculatePosition(targetEl, step);
+      } else if (targetEl) {
         this._positionHintForStep(step);
       }
     });
+  }
+
+  private _resolveTarget(config: StepConfig): HTMLElement | null {
+    const isMobile = isTouchActive() && this._layoutService.isShowMobileBottomNav();
+    const selectors = config.selector(
+      isMobile,
+      this.onboardingHintService.swipeTargetTaskId(),
+    );
+    for (const selector of Array.isArray(selectors) ? selectors : [selectors]) {
+      const el = document.querySelector<HTMLElement>(selector);
+      if (el && isVisible(el)) {
+        return el;
+      }
+    }
+    return null;
   }
 
   private _measureHintHeight(): number | undefined {
@@ -286,10 +330,7 @@ export class OnboardingHintComponent {
 
     this._updateMessage(config, step);
 
-    const isMobile = isTouchActive() && this._layoutService.isShowMobileBottomNav();
-    const targetEl = document.querySelector<HTMLElement>(
-      config.selector(isMobile, this.onboardingHintService.swipeTargetTaskId()),
-    );
+    const targetEl = this._resolveTarget(config);
     if (!targetEl) {
       return false;
     }
