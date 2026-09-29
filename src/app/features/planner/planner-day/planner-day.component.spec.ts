@@ -111,6 +111,8 @@ describe('PlannerDayComponent', () => {
       ({ id, subTaskIds: [], ...o }) as TaskCopy;
     const container = { data: DAY };
 
+    afterEach(() => TestBed.inject(MockStore).resetSelectors());
+
     const dropEv = (
       t: TaskCopy,
       o: Partial<CdkDragDrop<string, string, TaskCopy>> = {},
