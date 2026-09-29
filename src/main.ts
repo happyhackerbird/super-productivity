@@ -54,12 +54,7 @@ import { MatSidenavModule } from '@angular/material/sidenav';
 import { MatBottomSheetModule } from '@angular/material/bottom-sheet';
 import { ReminderModule } from './app/features/reminder/reminder.module';
 import { provideAnimationsAsync } from '@angular/platform-browser/animations/async';
-import {
-  PreloadAllModules,
-  provideRouter,
-  withHashLocation,
-  withPreloading,
-} from '@angular/router';
+import { provideRouter, withHashLocation } from '@angular/router';
 import { APP_ROUTES } from './app/app.routes';
 import { StoreModule, Store } from '@ngrx/store';
 import { META_REDUCERS } from './app/root-store/meta/meta-reducer-registry';
@@ -270,7 +265,10 @@ bootstrapApplication(AppComponent, {
         },
       }),
     },
-    provideRouter(APP_ROUTES, withHashLocation(), withPreloading(PreloadAllModules)),
+    // No route preloading: each page's chunk is fetched and parsed on first
+    // visit instead of all ~125 lazy chunks right after startup. The service
+    // worker still prefetches every *.js (ngsw-config.json), so offline works.
+    provideRouter(APP_ROUTES, withHashLocation()),
     PLUGIN_INITIALIZER_PROVIDER,
     provideZonelessChangeDetection(),
     // Initialize operation capture service for synchronous state change capture
