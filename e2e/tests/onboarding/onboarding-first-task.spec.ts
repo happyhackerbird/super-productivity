@@ -11,7 +11,7 @@ const pixel5TestOptions = { ...devices['Pixel 5'] };
 // Browser type is worker-scoped and cannot be overridden inside a describe block.
 Reflect.deleteProperty(pixel5TestOptions, 'defaultBrowserType');
 
-const INBOX_TIP = 'A few tips are waiting in your Inbox.';
+const INBOX_TIP = 'Some optional tips are waiting in your Inbox.';
 const INBOX_NAV_ITEM =
   'magic-side-nav nav-item[data-project-id="INBOX_PROJECT"] .nav-link';
 
@@ -90,7 +90,9 @@ test.describe('First-run onboarding', () => {
     await page.close();
   });
 
-  test('closing the Inbox tip ends guidance for good', async ({ isolatedContext }) => {
+  test('the last tip concludes guidance and ends it for good', async ({
+    isolatedContext,
+  }) => {
     const page = await isolatedContext.newPage();
     const runtimeErrors = attachPageErrorCollector(page, 'onboarding dismiss');
     installDevErrorDialogHandler(page, 'onboarding dismiss');
@@ -103,7 +105,8 @@ test.describe('First-run onboarding', () => {
     // Focus returns to + after the composer closes; move it so the + tooltip
     // does not sit on top of the hint's close button.
     await page.mouse.click(640, 600);
-    await hint.getByRole('button', { name: 'Close tip' }).click();
+    await expect(hint).toContainText("You're all set");
+    await hint.getByRole('button', { name: 'Got it' }).click();
     await expect(hint).toHaveCount(0);
 
     await waitForStatePersistence(page);

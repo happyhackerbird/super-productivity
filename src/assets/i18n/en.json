@@ -3043,7 +3043,9 @@
     "HINTS": {
       "CREATE_TASK": "Click + to add your first task",
       "CREATE_TASK_TOUCH": "Tap + to add your first task",
-      "EXPLORE_INBOX": "A few tips are waiting in your Inbox.",
+      "DONE_TITLE": "You're all set",
+      "EXPLORE_INBOX": "Some optional tips are waiting in your Inbox. Try them or delete them, whenever you like.",
+      "GOT_IT": "Got it",
       "TASK_SWIPE_LEFT_TOUCH": "Swipe task left for more actions",
       "TASK_SWIPE_RIGHT_TOUCH": "Swipe task right to mark it as done",
       "OR_PRESS": "or press",
