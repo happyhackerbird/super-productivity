@@ -1,13 +1,15 @@
 @if (hintPosition(); as pos) {
+  @let step = onboardingHintService.currentStep();
   <div
     class="hint-container"
     [class.floating]="isFloating()"
-    role="status"
+    [attr.role]="step === 'track-offer' ? 'region' : 'status'"
+    [attr.aria-label]="step === 'track-offer' ? (hintMessage() | translate) : null"
     aria-live="polite"
     [style.top.px]="isFloating() ? null : pos.top"
     [style.left.px]="isFloating() ? null : pos.left"
   >
-    @if (!isFloating() && onboardingHintService.currentStep() !== 'explore') {
+    @if (!isFloating()) {
       <div
         class="hint-arrow"
         [class.arrow-up]="pos.arrowDirection === 'up'"
@@ -23,29 +25,49 @@
         @if (hintMessage()) {
           <div class="hint-message">{{ hintMessage() | translate }}</div>
         }
-        @if (hintActions().length) {
-          <div
-            class="hint-actions"
-            [class.has-message]="!!hintMessage()"
-            [class.hint-actions-enter]="
-              onboardingHintService.currentStep() === 'task-swipe-right'
-            "
-          >
-            @for (action of hintActions(); track action.text) {
-              <div class="hint-action">
-                <mat-icon>{{ action.icon }}</mat-icon>
-                <span>{{ action.text | translate }}</span>
-              </div>
-            }
-          </div>
-        }
         @if (shortcutHint(); as shortcut) {
           <span class="shortcut-hint">
             {{ T.ONBOARDING.HINTS.OR_PRESS | translate }} <kbd>{{ shortcut }}</kbd>
           </span>
         }
+        @if (step === 'create-task') {
+          <div class="hint-secondary">
+            {{ T.ONBOARDING.SYNC_CTA | translate }}
+            <button
+              type="button"
+              class="hint-link"
+              (click)="openSyncSetup()"
+            >
+              {{ T.ONBOARDING.SYNC_CTA_LINK | translate }}
+            </button>
+          </div>
+        }
+        @if (step === 'track-offer') {
+          <div class="hint-buttons">
+            @if (onboardingHintService.isOfferTaskTrackable()) {
+              <button
+                mat-flat-button
+                color="primary"
+                type="button"
+                class="e2e-onboarding-start-timer"
+                (click)="startTimer()"
+              >
+                {{ T.ONBOARDING.HINTS.START_TIMER | translate }}
+              </button>
+            }
+            <button
+              mat-button
+              type="button"
+              class="e2e-onboarding-simplify"
+              (click)="simplify()"
+            >
+              {{ T.ONBOARDING.HINTS.SIMPLIFY | translate }}
+            </button>
+          </div>
+        }
       </div>
       <button
+        type="button"
         class="close-btn"
         [attr.aria-label]="T.ONBOARDING.HINTS.SKIP_ARIA | translate"
         (click)="skip()"

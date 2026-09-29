@@ -3040,33 +3040,17 @@
     "TASK_MARKED_DONE": "Task marked as done"
   },
   "ONBOARDING": {
-    "TITLE": "How do you want to use Super Productivity?",
-    "SUBTITLE": "Pick a setup that matches your workflow. You can always change this later in Settings.",
-    "PRIVACY_HINT": "Your data stays securely on your device unless you choose to set up sync.",
     "SYNC_CTA": "Already using Super Productivity on another device?",
     "SYNC_CTA_LINK": "Set up sync",
-    "PRESETS": {
-      "SIMPLE_TODO": {
-        "TITLE": "Simple Todo List",
-        "DESCRIPTION": "A clean task manager with projects, tags, and notes. No extras."
-      },
-      "TIME_TRACKER": {
-        "TITLE": "Time Tracker",
-        "DESCRIPTION": "Track how long tasks take. Great for billing hours or understanding where your time goes."
-      },
-      "PRODUCTIVITY_PRO": {
-        "TITLE": "Productivity Suite",
-        "DESCRIPTION": "Plan your day, build habits, focus deeply, and track your time. All in one place."
-      }
-    },
     "HINTS": {
       "CREATE_TASK": "Click + to add your first task",
       "CREATE_TASK_TOUCH": "Tap + to add your first task",
-      "EXPLORE": "Feel free to click around and explore! You can find help in the sidebar.",
-      "EXPLORE_TOUCH": "Feel free to explore. You can find help in the sidebar.",
-      "TASK_TAP_TOUCH": "Tap a task to open its details.",
-      "TASK_SWIPE_LEFT_TOUCH": "Swipe task left for more actions",
-      "TASK_SWIPE_RIGHT_TOUCH": "Swipe task right to mark it as done",
+      "TRACK_OFFER": "Want to track time on this task?",
+      "START_TIMER": "Start timer",
+      "SIMPLIFY": "Just a to-do list",
+      "SIMPLIFIED": "Switched to a simple to-do list. Turn features back on in Settings > App Features.",
+      "PAUSE": "Time is being tracked. Click here to pause – the time stays on the task.",
+      "PAUSE_TOUCH": "Time is being tracked. Tap here to pause – the time stays on the task.",
       "OR_PRESS": "or press",
       "SKIP_ARIA": "Dismiss hint"
     }

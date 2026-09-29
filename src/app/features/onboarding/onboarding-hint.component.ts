@@ -8,7 +8,7 @@ import {
   signal,
   viewChild,
 } from '@angular/core';
-import { MatIcon } from '@angular/material/icon';
+import { MatButton } from '@angular/material/button';
 import { TranslatePipe } from '@ngx-translate/core';
 import { OnboardingHintService, OnboardingStep } from './onboarding-hint.service';
 import { isTouchActive } from '../../util/input-intent';
@@ -19,20 +19,17 @@ import { T } from '../../t.const';
 /** Max retries when target element is not yet in the DOM */
 const MAX_POSITION_RETRIES = 10;
 const POSITION_RETRY_DELAY_MS = 120;
-const MOBILE_TASK_HINT_SELECTOR = '.today .task-list-wrapper .task-list-inner > task';
 const MOBILE_CREATE_TASK_HINT_VERTICAL_OFFSET = 10;
 
 interface StepConfig {
-  selector: ((isMobile: boolean) => string | null) | null;
+  selector: (isMobile: boolean, offerTaskId: string | null) => string | null;
   message: string;
   touchMessage?: string;
-  touchActions?: TouchHintAction[];
   showShortcut: boolean;
-}
-
-interface TouchHintAction {
-  icon: string;
-  text: string;
+  /** Pulse the target element to draw attention to it */
+  isPulse: boolean;
+  /** Show the hint floating when the target cannot be found */
+  isFloatingFallback: boolean;
 }
 
 const STEP_CONFIGS = new Map<OnboardingStep, StepConfig>([
@@ -43,52 +40,31 @@ const STEP_CONFIGS = new Map<OnboardingStep, StepConfig>([
       message: T.ONBOARDING.HINTS.CREATE_TASK,
       touchMessage: T.ONBOARDING.HINTS.CREATE_TASK_TOUCH,
       showShortcut: true,
+      isPulse: true,
+      isFloatingFallback: false,
     },
   ],
   [
-    'task-tap',
+    'track-offer',
     {
-      selector: () => MOBILE_TASK_HINT_SELECTOR,
-      message: T.ONBOARDING.HINTS.EXPLORE,
-      touchMessage: T.ONBOARDING.HINTS.TASK_TAP_TOUCH,
+      // Resolved from outside the task list so task.component stays untouched.
+      selector: (_isMobile, offerTaskId) =>
+        offerTaskId ? `task[data-task-id="${CSS.escape(offerTaskId)}"]` : null,
+      message: T.ONBOARDING.HINTS.TRACK_OFFER,
       showShortcut: false,
+      isPulse: false,
+      isFloatingFallback: true,
     },
   ],
   [
-    'task-swipe-left',
+    'pause-hint',
     {
-      selector: () => MOBILE_TASK_HINT_SELECTOR,
-      message: T.ONBOARDING.HINTS.EXPLORE,
-      touchActions: [
-        {
-          icon: 'swipe_left',
-          text: T.ONBOARDING.HINTS.TASK_SWIPE_LEFT_TOUCH,
-        },
-      ],
+      selector: () => '.tour-playBtn',
+      message: T.ONBOARDING.HINTS.PAUSE,
+      touchMessage: T.ONBOARDING.HINTS.PAUSE_TOUCH,
       showShortcut: false,
-    },
-  ],
-  [
-    'task-swipe-right',
-    {
-      selector: () => MOBILE_TASK_HINT_SELECTOR,
-      message: T.ONBOARDING.HINTS.EXPLORE,
-      touchActions: [
-        {
-          icon: 'swipe_right',
-          text: T.ONBOARDING.HINTS.TASK_SWIPE_RIGHT_TOUCH,
-        },
-      ],
-      showShortcut: false,
-    },
-  ],
-  [
-    'explore',
-    {
-      selector: (isMobile) => (isMobile ? MOBILE_TASK_HINT_SELECTOR : null),
-      message: T.ONBOARDING.HINTS.EXPLORE,
-      touchMessage: T.ONBOARDING.HINTS.EXPLORE_TOUCH,
-      showShortcut: false,
+      isPulse: false,
+      isFloatingFallback: false,
     },
   ],
 ]);
@@ -103,7 +79,7 @@ interface HintPosition {
 @Component({
   selector: 'onboarding-hint',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [TranslatePipe, MatIcon],
+  imports: [TranslatePipe, MatButton],
   templateUrl: './onboarding-hint.component.html',
   styleUrl: './onboarding-hint.component.scss',
 })
@@ -112,7 +88,6 @@ export class OnboardingHintComponent {
   onboardingHintService = inject(OnboardingHintService);
   hintPosition = signal<HintPosition | null>(null);
   hintMessage = signal<string>('');
-  hintActions = signal<TouchHintAction[]>([]);
   shortcutHint = signal<string | null>(null);
   isFloating = signal(false);
 
@@ -130,6 +105,7 @@ export class OnboardingHintComponent {
       if (step === null) {
         return;
       }
+      this.hintPosition.set(null);
       this._schedulePosition(step, 0);
 
       onCleanup(() => {
@@ -155,12 +131,29 @@ export class OnboardingHintComponent {
     this.onboardingHintService.skip();
   }
 
+  startTimer(): void {
+    this.onboardingHintService.startTimerForOfferTask();
+  }
+
+  simplify(): void {
+    this.onboardingHintService.simplifyToTodoList();
+  }
+
+  openSyncSetup(): void {
+    void this.onboardingHintService.openSyncSetup();
+  }
+
   private _schedulePosition(step: OnboardingStep, retryCount: number): void {
     this._positionTimeout = setTimeout(
       () => {
         const found = this._positionHintForStep(step);
-        if (!found && retryCount < MAX_POSITION_RETRIES) {
+        if (found) {
+          return;
+        }
+        if (retryCount < MAX_POSITION_RETRIES) {
           this._schedulePosition(step, retryCount + 1);
+        } else if (STEP_CONFIGS.get(step)?.isFloatingFallback) {
+          this._showFloating();
         }
       },
       retryCount === 0 ? 0 : POSITION_RETRY_DELAY_MS,
@@ -190,23 +183,22 @@ export class OnboardingHintComponent {
     this._updateMessage(config);
 
     const isMobile = isTouchActive() && this._layoutService.isShowMobileBottomNav();
-    const selector = config.selector?.(isMobile) ?? null;
-
-    // Floating hint (no target element)
+    const selector = config.selector(isMobile, this.onboardingHintService.offerTaskId());
     if (selector === null) {
-      this.isFloating.set(true);
-      this._cleanupPulse();
-      this.hintPosition.set({ top: 0, left: 0, arrowOffset: 0, arrowDirection: 'up' });
-      return true;
+      return false;
     }
 
-    this.isFloating.set(false);
     const targetEl = document.querySelector<HTMLElement>(selector);
     if (!targetEl) {
       return false;
     }
 
-    this._applyPulse(targetEl);
+    this.isFloating.set(false);
+    if (config.isPulse) {
+      this._applyPulse(targetEl);
+    } else {
+      this._cleanupPulse();
+    }
     this._calculatePosition(targetEl, step);
 
     // After the hint renders, re-measure with actual height for accurate positioning
@@ -228,9 +220,17 @@ export class OnboardingHintComponent {
     return true;
   }
 
+  private _showFloating(): void {
+    this._resizeObserver?.disconnect();
+    this._cleanupPulse();
+    this.isFloating.set(true);
+    this.hintPosition.set({ top: 0, left: 0, arrowOffset: 0, arrowDirection: 'up' });
+  }
+
   private _updateMessage(config: StepConfig): void {
-    this.hintMessage.set(isTouchActive() ? (config.touchMessage ?? '') : config.message);
-    this.hintActions.set(isTouchActive() ? (config.touchActions ?? []) : []);
+    this.hintMessage.set(
+      isTouchActive() ? (config.touchMessage ?? config.message) : config.message,
+    );
     if (!isTouchActive() && config.showShortcut) {
       const shortcut = this._globalConfigService.cfg()?.keyboard?.addNewTask;
       this.shortcutHint.set(shortcut || null);
@@ -249,11 +249,7 @@ export class OnboardingHintComponent {
     const hintWidth = 260;
     // Approximate rendered height of the hint chip.
     // Touch hints can wrap to multiple lines, especially for task gesture onboarding.
-    const estimatedHintHeight = isTouchActive()
-      ? this.hintActions().length > 0
-        ? 136
-        : 76
-      : 48;
+    const estimatedHintHeight = step === 'track-offer' ? 120 : isTouchActive() ? 76 : 48;
     const hintHeight = measuredHintHeight ?? estimatedHintHeight;
     const gap = 12;
 

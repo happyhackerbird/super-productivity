@@ -1,263 +1,240 @@
-import { effect, inject, Injectable, signal } from '@angular/core';
-import { ofType } from '@ngrx/effects';
-import { Action, Store } from '@ngrx/store';
-import { Observable, Subscription } from 'rxjs';
-import { concatMap, filter, first, take } from 'rxjs/operators';
+import { computed, effect, inject, Injectable, signal, untracked } from '@angular/core';
+import { MatDialog } from '@angular/material/dialog';
+import { Store } from '@ngrx/store';
+import { Subscription } from 'rxjs';
+import { concatMap, first } from 'rxjs/operators';
 import { LS } from '../../core/persistence/storage-keys.const';
-import { TaskSharedActions } from '../../root-store/meta/task-shared.actions';
-import { LOCAL_ACTIONS } from '../../util/local-actions.token';
 import { LayoutService } from '../../core-ui/layout/layout.service';
 import { DataInitStateService } from '../../core/data-init/data-init-state.service';
-import { selectActiveWorkContext } from '../work-context/store/work-context.selectors';
+import { SnackService } from '../../core/snack/snack.service';
 import { isTouchActive } from '../../util/input-intent';
+import { T } from '../../t.const';
+import { AppFeaturesConfig } from '../config/global-config.model';
+import { GlobalConfigService } from '../config/global-config.service';
+import { ProjectService } from '../project/project.service';
 import { TaskService } from '../tasks/task.service';
-import { TaskFocusService } from '../tasks/task-focus.service';
+import { selectTaskEntities } from '../tasks/store/task.selectors';
+import { TaskAddEvent } from '../tasks/add-task-bar/add-task-bar.component';
+import { SIMPLE_TODO_FEATURES } from './onboarding-presets.const';
 
-export type OnboardingStep =
-  | 'create-task'
-  | 'task-tap'
-  | 'task-swipe-left'
-  | 'task-swipe-right'
-  | 'explore';
+type DialogSyncCfgComponentType =
+  typeof import('../../imex/sync/dialog-sync-cfg/dialog-sync-cfg.component').DialogSyncCfgComponent;
 
-/** How long desktop and mobile onboarding steps stay visible before progressing/dismissing */
-const TASK_TAP_AUTO_ADVANCE_MS = 8000;
-const TASK_SWIPE_LEFT_AUTO_ADVANCE_MS = 16000;
-const TASK_SWIPE_RIGHT_AUTO_ADVANCE_MS = 16000;
-const EXPLORE_AUTO_DISMISS_MS = 16000;
-/** Delay after add-task-bar closes before showing explore hint */
-const EXPLORE_SHOW_DELAY_MS = 1000;
+export type OnboardingStep = 'create-task' | 'track-offer' | 'pause-hint';
 
+type OnboardingPhase = 'idle' | 'await-first-task' | 'track-offer' | 'pause-hint';
+
+/** More projects than the default ones means this is not a new user. */
+const RETURNING_USER_MIN_PROJECTS = 3;
+
+/**
+ * First-run guidance: value first, no upfront decision.
+ *
+ * 1. Point at "+" until the user adds their first real task via the composer.
+ * 2. Offer, next to that task, to track time on it or to simplify to a to-do list.
+ *    Ignoring the offer changes nothing. Feature settings are only written on an
+ *    explicit choice, because appFeatures sync to the user's other devices.
+ * 3. After "Start timer", point at the header pause button until tracking stops.
+ *
+ * No step advances on a timer. Reloading after the first task ends guidance.
+ */
 @Injectable({ providedIn: 'root' })
 export class OnboardingHintService {
-  currentStep = signal<OnboardingStep | null>(null);
-
-  private _actions$: Observable<Action> = inject(LOCAL_ACTIONS);
   private _layoutService = inject(LayoutService);
   private _dataInitStateService = inject(DataInitStateService);
   private _taskService = inject(TaskService);
-  private _taskFocusService = inject(TaskFocusService);
+  private _projectService = inject(ProjectService);
+  private _globalConfigService = inject(GlobalConfigService);
+  private _snackService = inject(SnackService);
+  private _matDialog = inject(MatDialog);
   private _store = inject(Store);
-  private _isStarted = false;
-  private _firstTaskIdForComposerAutoClose: string | null = null;
-  private _waitingForBarClose = false;
-  private _waitingForTaskPanelClose = false;
-  private _waitingForTaskContextMenuClose = false;
+
+  private _phase = signal<OnboardingPhase>('idle');
+  private _isSyncDialogOpen = signal(false);
+  private _isFirstTaskComposerAutoCloseUsed = false;
   private _startSub: Subscription | null = null;
-  private _listenSub: Subscription | null = null;
-  private _doneHintSub: Subscription | null = null;
-  private _postCreateShowTimeout: ReturnType<typeof setTimeout> | null = null;
-  private _stepAdvanceTimeout: ReturnType<typeof setTimeout> | null = null;
-  private _stepDismissTimeout: ReturnType<typeof setTimeout> | null = null;
+  private _taskEntities = this._store.selectSignal(selectTaskEntities);
+
+  readonly offerTaskId = signal<string | null>(null);
+
+  readonly offerTask = computed(() => {
+    const id = this.offerTaskId();
+    return id ? (this._taskEntities()[id] ?? null) : null;
+  });
+
+  readonly isOfferTaskTrackable = computed(() => {
+    const task = this.offerTask();
+    return !!task && !task.isDone && task.subTaskIds.length === 0;
+  });
+
+  /** Hints hide while the composer or the sync dialog is open. */
+  readonly currentStep = computed<OnboardingStep | null>(() => {
+    const phase = this._phase();
+    if (phase === 'pause-hint') {
+      return 'pause-hint';
+    }
+    if (this._layoutService.isShowAddTaskBar() || this._isSyncDialogOpen()) {
+      return null;
+    }
+    if (phase === 'await-first-task') {
+      return 'create-task';
+    }
+    if (phase === 'track-offer' && this.offerTask()) {
+      return 'track-offer';
+    }
+    return null;
+  });
 
   constructor() {
-    if (localStorage.getItem(LS.ONBOARDING_HINTS_DONE)) {
+    if (!OnboardingHintService.isOnboardingInProgress()) {
       return;
     }
-
-    if (isTouchActive()) {
-      this._listenForTaskCompletion();
-    }
-
-    // Effect 1: Hide create-task hint when add-task-bar opens, show next step when it closes
-    effect(() => {
-      const isOpen = this._layoutService.isShowAddTaskBar();
-      if (isOpen && this.currentStep() === 'create-task') {
-        this.currentStep.set(null);
-      }
-      if (!isOpen && this._waitingForBarClose) {
-        this._waitingForBarClose = false;
-        this._postCreateShowTimeout = setTimeout(
-          () => this._showPostCreateStep(),
-          EXPLORE_SHOW_DELAY_MS,
-        );
-      }
-    });
-
-    // Effect 2: Advance from task-tap when user opens the task detail panel
-    effect(() => {
-      const selectedTaskId = this._taskService.selectedTaskId();
-      if (this.currentStep() === 'task-tap' && selectedTaskId) {
-        this.currentStep.set(null);
-        this._waitingForTaskPanelClose = true;
-        this._clearStepTimeouts();
-      }
-      if (this._waitingForTaskPanelClose && selectedTaskId === null) {
-        this._waitingForTaskPanelClose = false;
-        this._showTaskSwipeLeftStep();
-      }
-    });
-
-    // Effect 3: Advance from task-swipe-left when user opens the context menu
-    effect(() => {
-      const isContextMenuOpen = this._taskFocusService.isTaskContextMenuOpen();
-      if (this.currentStep() === 'task-swipe-left' && isContextMenuOpen) {
-        this.currentStep.set(null);
-        this._waitingForTaskContextMenuClose = true;
-        this._clearStepTimeouts();
-      }
-      if (this._waitingForTaskContextMenuClose && !isContextMenuOpen) {
-        this._waitingForTaskContextMenuClose = false;
-        this._showTaskSwipeRightStep();
-      }
-    });
-
+    // The first task was already added in an earlier session (or a preset was
+    // chosen in the previous onboarding flow): treat the unanswered offer as
+    // dismissed instead of repeating it.
     if (localStorage.getItem(LS.ONBOARDING_PRESET_DONE)) {
-      this._startOnboarding();
-    }
-  }
-
-  static isOnboardingInProgress(): boolean {
-    // Onboarding is fully completed
-    if (localStorage.getItem(LS.ONBOARDING_HINTS_DONE)) {
-      return false;
-    }
-    // Already past preset selection, hints still pending
-    if (localStorage.getItem(LS.ONBOARDING_PRESET_DONE)) {
-      return true;
-    }
-    // Fresh user still on preset selection screen (no preset done, no skip tour)
-    return !localStorage.getItem(LS.IS_SKIP_TOUR);
-  }
-
-  startAfterPresetSelection(): void {
-    if (localStorage.getItem(LS.ONBOARDING_HINTS_DONE)) {
+      this._markDone();
       return;
     }
-    this._startOnboarding();
-  }
 
-  shouldAutoCloseFirstTaskComposer(taskId: string): boolean {
-    const shouldAutoClose =
-      taskId === this._firstTaskIdForComposerAutoClose &&
-      this._waitingForBarClose &&
-      isTouchActive() &&
-      this._layoutService.isShowMobileBottomNav();
-    this._firstTaskIdForComposerAutoClose = null;
-    return shouldAutoClose;
-  }
+    // End the offer if its task disappears (deleted, undone by sync, ...).
+    effect(() => {
+      if (this._phase() === 'track-offer' && !this.offerTask()) {
+        untracked(() => this._markDone());
+      }
+    });
 
-  skip(): void {
-    localStorage.setItem(LS.ONBOARDING_HINTS_DONE, 'true');
-    this.currentStep.set(null);
-    this._firstTaskIdForComposerAutoClose = null;
-    this._waitingForBarClose = false;
-    this._waitingForTaskPanelClose = false;
-    this._waitingForTaskContextMenuClose = false;
-    this._startSub?.unsubscribe();
-    this._listenSub?.unsubscribe();
-    this._doneHintSub?.unsubscribe();
-    this._clearStepTimeouts();
-  }
-
-  private _startOnboarding(): void {
-    if (this._isStarted) {
-      return;
-    }
-    this._isStarted = true;
+    // Pausing (or tracking being turned off) completes the tracking hint.
+    effect(() => {
+      if (this._phase() === 'pause-hint' && this._taskService.currentTaskId() === null) {
+        untracked(() => this._markDone());
+      }
+    });
 
     this._startSub = this._dataInitStateService.isAllDataLoadedInitially$
       .pipe(
-        concatMap(() => this._store.select(selectActiveWorkContext)),
-        take(1),
+        concatMap(() => this._projectService.list$),
+        first(),
       )
-      .subscribe((ctx) => {
-        if (ctx.taskIds.length > 0) {
-          // Tasks already exist (e.g. from example tasks) — skip "create-task"
-          // and move directly to the next relevant onboarding hint.
-          this._showPostCreateStep();
-        } else {
-          this.currentStep.set('create-task');
-          this._listenForTaskCreation();
+      .subscribe((projects) => {
+        if (
+          projects.length >= RETURNING_USER_MIN_PROJECTS ||
+          this._globalConfigService.sync()?.isEnabled
+        ) {
+          this._markDone();
+          return;
         }
+        this._phase.set('await-first-task');
       });
   }
 
-  private _listenForTaskCreation(): void {
-    this._listenSub = this._actions$
-      .pipe(ofType(TaskSharedActions.addTask), first())
-      .subscribe(({ task }) => {
-        this._listenSub?.unsubscribe();
-        this._firstTaskIdForComposerAutoClose = task.id;
-        this._waitingForBarClose = true;
-        // If the bar is already closed (e.g. keyboard shortcut), start the delay now
-        if (!this._layoutService.isShowAddTaskBar()) {
-          this._waitingForBarClose = false;
-          this._postCreateShowTimeout = setTimeout(
-            () => this._showPostCreateStep(),
-            EXPLORE_SHOW_DELAY_MS,
-          );
-        }
-      });
+  static isOnboardingInProgress(): boolean {
+    return (
+      !localStorage.getItem(LS.ONBOARDING_HINTS_DONE) &&
+      !localStorage.getItem(LS.IS_SKIP_TOUR)
+    );
   }
 
-  private _showPostCreateStep(): void {
-    if (isTouchActive() && this._layoutService.isShowMobileBottomNav()) {
-      this._showTaskTapStep();
+  /** Called for every task created through the global add-task bar. */
+  onTaskAdded({ taskId, isNewTask }: TaskAddEvent): void {
+    if (this._phase() !== 'await-first-task' || !isNewTask) {
       return;
     }
-    this._showExploreStep();
-  }
-
-  private _showTaskTapStep(): void {
-    this._clearStepTimeouts();
-    this.currentStep.set('task-tap');
-    this._stepAdvanceTimeout = setTimeout(
-      () => this._showTaskSwipeLeftStep(),
-      TASK_TAP_AUTO_ADVANCE_MS,
-    );
-  }
-
-  private _showTaskSwipeLeftStep(): void {
-    this._clearStepTimeouts();
-    this._waitingForTaskContextMenuClose = false;
-    this.currentStep.set('task-swipe-left');
-    this._stepAdvanceTimeout = setTimeout(
-      () => this._showTaskSwipeRightStep(),
-      TASK_SWIPE_LEFT_AUTO_ADVANCE_MS,
-    );
-  }
-
-  private _showTaskSwipeRightStep(): void {
-    this._clearStepTimeouts();
-    this.currentStep.set('task-swipe-right');
-    this._stepDismissTimeout = setTimeout(
-      () => this.skip(),
-      TASK_SWIPE_RIGHT_AUTO_ADVANCE_MS,
-    );
-  }
-
-  private _showExploreStep(): void {
-    this._clearStepTimeouts();
-    this.currentStep.set('explore');
-    this._stepDismissTimeout = setTimeout(() => this.skip(), EXPLORE_AUTO_DISMISS_MS);
-  }
-
-  private _clearStepTimeouts(): void {
-    if (this._postCreateShowTimeout !== null) {
-      clearTimeout(this._postCreateShowTimeout);
-      this._postCreateShowTimeout = null;
+    if (!this._taskEntities()[taskId]) {
+      return;
     }
-    if (this._stepAdvanceTimeout !== null) {
-      clearTimeout(this._stepAdvanceTimeout);
-      this._stepAdvanceTimeout = null;
+    // From here on a reload counts as dismissing the offer.
+    localStorage.setItem(LS.ONBOARDING_PRESET_DONE, 'true');
+
+    // Someone who turned tracking off before adding a task has already chosen.
+    if (!this._globalConfigService.appFeatures().isTimeTrackingEnabled) {
+      this._markDone();
+      return;
     }
-    if (this._stepDismissTimeout !== null) {
-      clearTimeout(this._stepDismissTimeout);
-      this._stepDismissTimeout = null;
-    }
+    this.offerTaskId.set(taskId);
+    this._phase.set('track-offer');
   }
 
-  private _listenForTaskCompletion(): void {
-    this._doneHintSub = this._actions$
-      .pipe(
-        ofType(TaskSharedActions.updateTask),
-        filter(({ task }) => task.changes.isDone === true),
-      )
+  /**
+   * On phones the composer covers the task list; close it after the first real
+   * task so the offer next to it becomes visible. Later tasks keep it open.
+   */
+  shouldAutoCloseFirstTaskComposer(taskId: string): boolean {
+    if (
+      this._isFirstTaskComposerAutoCloseUsed ||
+      this._phase() !== 'track-offer' ||
+      this.offerTaskId() !== taskId
+    ) {
+      return false;
+    }
+    this._isFirstTaskComposerAutoCloseUsed = true;
+    return isTouchActive() && this._layoutService.isShowMobileBottomNav();
+  }
+
+  startTimerForOfferTask(): void {
+    const taskId = this.offerTaskId();
+    if (this._phase() !== 'track-offer' || !taskId || !this.isOfferTaskTrackable()) {
+      this._markDone();
+      return;
+    }
+    if (!this._globalConfigService.appFeatures().isTimeTrackingEnabled) {
+      this._globalConfigService.updateSection(
+        'appFeatures',
+        { isTimeTrackingEnabled: true } as Partial<AppFeaturesConfig>,
+        true,
+      );
+    }
+    this._taskService.setCurrentId(taskId);
+    this._phase.set('pause-hint');
+  }
+
+  simplifyToTodoList(): void {
+    if (this._phase() !== 'track-offer') {
+      return;
+    }
+    this._globalConfigService.updateSection('appFeatures', SIMPLE_TODO_FEATURES, true);
+    this._snackService.open({
+      type: 'SUCCESS',
+      msg: T.ONBOARDING.HINTS.SIMPLIFIED,
+    });
+    this._markDone();
+  }
+
+  async openSyncSetup(): Promise<void> {
+    if (this._isSyncDialogOpen()) {
+      return;
+    }
+    this._isSyncDialogOpen.set(true);
+    let DialogSyncCfgComponent: DialogSyncCfgComponentType;
+    try {
+      ({ DialogSyncCfgComponent } =
+        await import('../../imex/sync/dialog-sync-cfg/dialog-sync-cfg.component'));
+    } catch (e) {
+      this._isSyncDialogOpen.set(false);
+      throw e;
+    }
+    this._matDialog
+      .open(DialogSyncCfgComponent)
+      .afterClosed()
       .subscribe(() => {
-        if (this.currentStep() === 'task-swipe-right') {
-          this._showExploreStep();
+        this._isSyncDialogOpen.set(false);
+        // A returning user restoring their data needs no new-user guidance.
+        if (this._globalConfigService.sync()?.isEnabled) {
+          this._markDone();
         }
       });
+  }
+
+  skip(): void {
+    this._markDone();
+  }
+
+  private _markDone(): void {
+    localStorage.setItem(LS.ONBOARDING_PRESET_DONE, 'true');
+    localStorage.setItem(LS.ONBOARDING_HINTS_DONE, 'true');
+    this._startSub?.unsubscribe();
+    this._startSub = null;
+    this.offerTaskId.set(null);
+    this._phase.set('idle');
   }
 }
