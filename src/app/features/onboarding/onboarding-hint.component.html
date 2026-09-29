@@ -29,15 +29,6 @@
             {{ T.ONBOARDING.HINTS.OR_PRESS | translate }} <kbd>{{ shortcut }}</kbd>
           </span>
         }
-        @if (step === 'create-task') {
-          <button
-            type="button"
-            class="hint-link"
-            (click)="openSyncSetup()"
-          >
-            {{ T.ONBOARDING.HINTS.SYNC_LINK | translate }}
-          </button>
-        }
         @if (step === 'track-offer') {
           <div class="hint-buttons">
             <button

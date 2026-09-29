@@ -1,11 +1,9 @@
 import { computed, effect, inject, Injectable, signal, untracked } from '@angular/core';
 import { toSignal } from '@angular/core/rxjs-interop';
-import { MatDialog } from '@angular/material/dialog';
 import { ofType } from '@ngrx/effects';
 import { Action, Store } from '@ngrx/store';
 import { Observable, Subscription } from 'rxjs';
 import { concatMap, filter, first } from 'rxjs/operators';
-import { Log } from '../../core/log';
 import { LS } from '../../core/persistence/storage-keys.const';
 import { LayoutService } from '../../core-ui/layout/layout.service';
 import { DataInitStateService } from '../../core/data-init/data-init-state.service';
@@ -23,9 +21,6 @@ import { selectTaskFeatureState } from '../tasks/store/task.selectors';
 import { findTaskToStart } from '../tasks/util/find-task-to-start';
 import { WorkContextService } from '../work-context/work-context.service';
 import { SIMPLE_TODO_DISABLED_FEATURES } from './onboarding-presets.const';
-
-type DialogSyncCfgComponentType =
-  typeof import('../../imex/sync/dialog-sync-cfg/dialog-sync-cfg.component').DialogSyncCfgComponent;
 
 export type OnboardingStep =
   | 'create-task'
@@ -72,12 +67,10 @@ export class OnboardingHintService {
   private _projectService = inject(ProjectService);
   private _globalConfigService = inject(GlobalConfigService);
   private _snackService = inject(SnackService);
-  private _matDialog = inject(MatDialog);
   private _store = inject(Store);
   private _localActions$: Observable<Action> = inject(LOCAL_ACTIONS);
 
   private _phase = signal<OnboardingPhase>('idle');
-  private _isSyncDialogOpen = signal(false);
   private _wasTaskMenuOpened = false;
   private _isFirstTaskComposerAutoCloseUsed = false;
   private _startSub: Subscription | null = null;
@@ -108,10 +101,10 @@ export class OnboardingHintService {
     return task && !task.isDone ? task.id : null;
   });
 
-  /** Hints hide while the composer, the sync dialog, a task panel or task menu is open. */
+  /** Hints hide while the composer, a task panel or task menu is open. */
   readonly currentStep = computed<OnboardingStep | null>(() => {
     const phase = this._phase();
-    if (this._layoutService.isShowAddTaskBar() || this._isSyncDialogOpen()) {
+    if (this._layoutService.isShowAddTaskBar()) {
       return null;
     }
     if (phase === 'task-swipe-left' || phase === 'task-swipe-right') {
@@ -272,26 +265,6 @@ export class OnboardingHintService {
         this._globalConfigService.updateSection('appFeatures', previous, true),
       config: { duration: SIMPLIFIED_SNACK_DURATION_MS },
     });
-  }
-
-  async openSyncSetup(): Promise<void> {
-    if (this._isSyncDialogOpen()) {
-      return;
-    }
-    this._isSyncDialogOpen.set(true);
-    let DialogSyncCfgComponent: DialogSyncCfgComponentType;
-    try {
-      ({ DialogSyncCfgComponent } =
-        await import('../../imex/sync/dialog-sync-cfg/dialog-sync-cfg.component'));
-    } catch (e) {
-      this._isSyncDialogOpen.set(false);
-      Log.err('OnboardingHintService: failed to load sync dialog', e);
-      return;
-    }
-    this._matDialog
-      .open(DialogSyncCfgComponent)
-      .afterClosed()
-      .subscribe(() => this._isSyncDialogOpen.set(false));
   }
 
   private _onFirstTaskCandidate(taskId: string): void {

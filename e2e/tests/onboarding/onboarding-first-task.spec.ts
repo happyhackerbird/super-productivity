@@ -21,12 +21,6 @@ const openFreshApp = async (page: Page): Promise<void> => {
   await expect(page.locator('onboarding-hint')).toContainText(
     'Click + to add your first task',
   );
-  // Returning users keep a quiet way to sync.
-  await expect(
-    page
-      .locator('onboarding-hint')
-      .getByRole('button', { name: 'Sync from another device' }),
-  ).toBeVisible();
 };
 
 const expectHintBelow = async (page: Page, targetSelector: string): Promise<void> => {
@@ -180,14 +174,14 @@ test.describe('First-run onboarding', () => {
       await expect(page.locator('onboarding-hint')).toContainText(
         'Tap + to add your first task',
       );
-      // The hint sits above the + button and must not cover it.
+      // The hint sits above the + button, clear of its pulse glow and the arrow.
       const addBtn = await page.locator('.add-task-button').boundingBox();
       await expect
         .poll(async () => {
           const chip = await page.locator('onboarding-hint .hint-chip').boundingBox();
-          return chip ? chip.y + chip.height <= addBtn!.y : false;
+          return chip ? addBtn!.y - (chip.y + chip.height) : -1;
         })
-        .toBe(true);
+        .toBeGreaterThanOrEqual(16);
 
       await page.getByRole('button', { name: 'Add new task' }).tap();
       const input = page.locator('add-task-bar.global .main-input');

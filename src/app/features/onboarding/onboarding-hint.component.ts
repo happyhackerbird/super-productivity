@@ -26,6 +26,9 @@ import { truncate } from '../../util/truncate';
 /** Max retries when target element is not yet in the DOM */
 const MAX_POSITION_RETRIES = 10;
 const POSITION_RETRY_DELAY_MS = 120;
+const HINT_GAP_PX = 12;
+/** Must match the glow spread in styles/components/onboarding-pulse.scss */
+const PULSE_GLOW_PX = 8;
 /** Keeps the offer to about two lines in the 260px chip */
 const MAX_TITLE_LENGTH = 32;
 
@@ -163,10 +166,16 @@ export class OnboardingHintComponent {
         passive: true,
       });
       window.addEventListener('resize', onViewportChange, { passive: true });
+      // Transforms (e.g. the bottom nav sliding in on startup) move the target
+      // without resizing it, so re-anchor once animations and transitions end.
+      document.addEventListener('animationend', onViewportChange, { passive: true });
+      document.addEventListener('transitionend', onViewportChange, { passive: true });
     });
     inject(DestroyRef).onDestroy(() => {
       document.removeEventListener('scroll', onViewportChange, { capture: true });
       window.removeEventListener('resize', onViewportChange);
+      document.removeEventListener('animationend', onViewportChange);
+      document.removeEventListener('transitionend', onViewportChange);
       if (this._repositionFrame !== null) {
         cancelAnimationFrame(this._repositionFrame);
       }
@@ -189,10 +198,6 @@ export class OnboardingHintComponent {
 
   simplify(): void {
     this.onboardingHintService.simplifyToTodoList();
-  }
-
-  openSyncSetup(): void {
-    void this.onboardingHintService.openSyncSetup();
   }
 
   private _announce(step: OnboardingStep): void {
@@ -336,7 +341,10 @@ export class OnboardingHintComponent {
     // placed above its target (e.g. the mobile + button) cover it.
     const estimatedHintHeight = step === 'track-offer' ? 96 : isTouchActive() ? 76 : 48;
     const hintHeight = this._measureHintHeight() ?? estimatedHintHeight;
-    const gap = 12;
+    // Clear the target's pulse glow (8px box-shadow ring) and the hint's arrow.
+    const gap = STEP_CONFIGS.get(step)?.isPulse
+      ? HINT_GAP_PX + PULSE_GLOW_PX
+      : HINT_GAP_PX;
 
     const spaceBelow = window.innerHeight - rect.bottom;
     const placeBelow = spaceBelow > hintHeight + gap;

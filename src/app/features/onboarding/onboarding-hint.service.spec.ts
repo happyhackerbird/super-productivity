@@ -17,7 +17,6 @@ import { TaskService } from '../tasks/task.service';
 import { TaskFocusService } from '../tasks/task-focus.service';
 import { WorkContextType } from '../work-context/work-context.model';
 import { WorkContextService } from '../work-context/work-context.service';
-import { MatDialog } from '@angular/material/dialog';
 import { TaskSharedActions } from '../../root-store/meta/task-shared.actions';
 import { LOCAL_ACTIONS } from '../../util/local-actions.token';
 import { OnboardingHintService } from './onboarding-hint.service';
@@ -55,7 +54,6 @@ describe('OnboardingHintService', () => {
   let localActions$: Subject<Action>;
   let dataLoaded$: BehaviorSubject<boolean> | Subject<boolean>;
   let mainListTaskIds$: BehaviorSubject<string[]>;
-  let matDialog: jasmine.SpyObj<MatDialog>;
   let savedLs: Record<string, string | null>;
 
   const setTasks = (tasks: Task[], lastCurrentTaskId: string | null = null): void => {
@@ -123,7 +121,6 @@ describe('OnboardingHintService', () => {
     localActions$ = new Subject<Action>();
     dataLoaded$ = new BehaviorSubject(true);
     mainListTaskIds$ = new BehaviorSubject<string[]>(['task-1']);
-    matDialog = jasmine.createSpyObj<MatDialog>('MatDialog', ['open']);
 
     TestBed.configureTestingModule({
       providers: [
@@ -147,7 +144,6 @@ describe('OnboardingHintService', () => {
         { provide: SnackService, useValue: snackService },
         { provide: LOCAL_ACTIONS, useValue: localActions$ },
         { provide: WorkContextService, useValue: { mainListTaskIds$ } },
-        { provide: MatDialog, useValue: matDialog },
         { provide: TaskFocusService, useValue: { isTaskContextMenuOpen } },
       ],
     });
@@ -320,21 +316,6 @@ describe('OnboardingHintService', () => {
     mainListTaskIds$.next(['task-1']);
     TestBed.tick();
     expect(service.currentStep()).toBe('track-offer');
-  });
-
-  it('hides hints while the sync dialog is open', async () => {
-    const afterClosed$ = new Subject<void>();
-    matDialog.open.and.returnValue({
-      afterClosed: () => afterClosed$,
-    } as unknown as ReturnType<MatDialog['open']>);
-    const service = createService();
-
-    await service.openSyncSetup();
-    expect(matDialog.open).toHaveBeenCalledTimes(1);
-    expect(service.currentStep()).toBeNull();
-
-    afterClosed$.next();
-    expect(service.currentStep()).toBe('create-task');
   });
 
   it('switches features off only when the user picks a to-do list', () => {

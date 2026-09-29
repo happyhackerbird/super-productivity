@@ -3043,7 +3043,6 @@
     "HINTS": {
       "CREATE_TASK": "Click + to add your first task",
       "CREATE_TASK_TOUCH": "Tap + to add your first task",
-      "SYNC_LINK": "Sync from another device",
       "TRACK_OFFER": "Click play to track time on “{{title}}”.",
       "TRACK_OFFER_TOUCH": "Tap play to track time on “{{title}}”.",
       "SIMPLIFY": "I only need a to-do list",
