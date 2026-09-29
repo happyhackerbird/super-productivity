@@ -3043,14 +3043,13 @@
     "HINTS": {
       "CREATE_TASK": "Click + to add your first task",
       "CREATE_TASK_TOUCH": "Tap + to add your first task",
-      "TRACK_OFFER": "Want to see how long it takes? Click play to track time.",
-      "TRACK_OFFER_TOUCH": "Want to see how long it takes? Tap play to track time.",
-      "SIMPLIFY": "Just a to-do list",
-      "SIMPLIFIED": "Switched to a simple to-do list. Turn features back on in Settings > App Features.",
-      "PAUSE": "Tracking “{{title}}”. Click again to pause – the time stays on the task.",
-      "PAUSE_TOUCH": "Tracking “{{title}}”. Tap again to pause – the time stays on the task.",
+      "SYNC_LINK": "Sync from another device",
+      "TRACK_OFFER": "Click play to track time on “{{title}}”.",
+      "TRACK_OFFER_TOUCH": "Tap play to track time on “{{title}}”.",
+      "SIMPLIFY": "I only need a to-do list",
+      "SIMPLIFIED": "Simplified to a to-do list. Turn features back on in Settings › App Features.",
       "OR_PRESS": "or press",
-      "SKIP_ARIA": "Dismiss hint"
+      "SKIP_ARIA": "Close tip"
     }
   },
   "PDS": {

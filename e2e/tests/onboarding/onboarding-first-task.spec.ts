@@ -11,7 +11,7 @@ const pixel5TestOptions = { ...devices['Pixel 5'] };
 // Browser type is worker-scoped and cannot be overridden inside a describe block.
 Reflect.deleteProperty(pixel5TestOptions, 'defaultBrowserType');
 
-const TRACK_OFFER = /Want to see how long it takes\?/;
+const TRACK_OFFER = /play to track time on “.+”/;
 
 const openFreshApp = async (page: Page): Promise<void> => {
   await page.addInitScript(() => {
@@ -21,6 +21,12 @@ const openFreshApp = async (page: Page): Promise<void> => {
   await expect(page.locator('onboarding-hint')).toContainText(
     'Click + to add your first task',
   );
+  // Returning users keep a quiet way to sync.
+  await expect(
+    page
+      .locator('onboarding-hint')
+      .getByRole('button', { name: 'Sync from another device' }),
+  ).toBeVisible();
 };
 
 const expectHintBelow = async (page: Page, targetSelector: string): Promise<void> => {
@@ -61,15 +67,12 @@ test.describe('First-run onboarding', () => {
       .poll(() => expectHintBelow(page, '.tour-playBtn').then(() => true))
       .toBe(true);
 
-    // The real play button starts tracking; the hint then names the running task.
+    await expect(hint).toContainText(`Click play to track time on “${taskTitle}”.`);
+
+    // The real play button starts exactly the named task and ends guidance.
     await page.locator('.tour-playBtn').click();
     const task = page.locator('task').filter({ hasText: taskTitle }).first();
     await expect(task).toHaveClass(/isCurrent/);
-    await expect(hint).toContainText(`Tracking “${taskTitle}”`);
-
-    // Pausing through the same button completes the guidance.
-    await page.locator('.tour-playBtn').click();
-    await expect(task).not.toHaveClass(/isCurrent/);
     await expect(hint).toHaveCount(0);
 
     await waitForStatePersistence(page);
@@ -96,7 +99,7 @@ test.describe('First-run onboarding', () => {
 
     const hint = page.locator('onboarding-hint');
     await expect(hint).toContainText(TRACK_OFFER);
-    await hint.getByRole('button', { name: 'Just a to-do list' }).click();
+    await hint.getByRole('button', { name: 'I only need a to-do list' }).click();
 
     await expect(hint).toHaveCount(0);
     await expect(page.locator('.tour-playBtn')).toHaveCount(0);
@@ -127,7 +130,7 @@ test.describe('First-run onboarding', () => {
     // Focus returns to + after the composer closes; move it so the + tooltip
     // does not sit on top of the hint's close button.
     await page.mouse.click(640, 600);
-    await hint.getByRole('button', { name: 'Dismiss hint' }).click();
+    await hint.getByRole('button', { name: 'Close tip' }).click();
     await expect(hint).toHaveCount(0);
     await expect(page.locator('.tour-playBtn')).toBeVisible();
 
@@ -193,12 +196,14 @@ test.describe('First-run onboarding', () => {
 
       await expect(page.locator('add-task-bar.global')).toBeHidden();
       const hint = page.locator('onboarding-hint');
-      await expect(hint).toContainText('Tap play to track time');
+      await expect(hint).toContainText(
+        'Tap play to track time on “My first mobile task”.',
+      );
       await page.locator('.tour-playBtn').tap();
       await expect(
         page.locator('task').filter({ hasText: 'My first mobile task' }).first(),
       ).toHaveClass(/isCurrent/);
-      await expect(hint).toContainText('Tap again to pause');
+      await expect(hint).toHaveCount(0);
       assertNoRuntimeBrowserErrors(runtimeErrors, 'mobile onboarding');
       await page.close();
     });

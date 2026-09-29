@@ -11,10 +11,12 @@ import { AppFeaturesConfig } from '../config/global-config.model';
 import { GlobalConfigService } from '../config/global-config.service';
 import { DEFAULT_GLOBAL_CONFIG } from '../config/default-global-config.const';
 import { ProjectService } from '../project/project.service';
-import { selectTaskEntities } from '../tasks/store/task.selectors';
-import { Task } from '../tasks/task.model';
+import { selectTaskFeatureState } from '../tasks/store/task.selectors';
+import { Task, TaskState } from '../tasks/task.model';
 import { TaskService } from '../tasks/task.service';
 import { WorkContextType } from '../work-context/work-context.model';
+import { WorkContextService } from '../work-context/work-context.service';
+import { MatDialog } from '@angular/material/dialog';
 import { TaskSharedActions } from '../../root-store/meta/task-shared.actions';
 import { LOCAL_ACTIONS } from '../../util/local-actions.token';
 import { OnboardingHintService } from './onboarding-hint.service';
@@ -48,13 +50,16 @@ describe('OnboardingHintService', () => {
   let snackService: jasmine.SpyObj<SnackService>;
   let localActions$: Subject<Action>;
   let dataLoaded$: BehaviorSubject<boolean> | Subject<boolean>;
+  let mainListTaskIds$: BehaviorSubject<string[]>;
+  let matDialog: jasmine.SpyObj<MatDialog>;
   let savedLs: Record<string, string | null>;
 
-  const setTasks = (tasks: Task[]): void => {
-    store.overrideSelector(
-      selectTaskEntities,
-      Object.fromEntries(tasks.map((t) => [t.id, t])),
-    );
+  const setTasks = (tasks: Task[], lastCurrentTaskId: string | null = null): void => {
+    store.overrideSelector(selectTaskFeatureState, {
+      ids: tasks.map((t) => t.id),
+      entities: Object.fromEntries(tasks.map((t) => [t.id, t])),
+      lastCurrentTaskId,
+    } as unknown as TaskState);
     store.refreshState();
   };
 
@@ -110,6 +115,8 @@ describe('OnboardingHintService', () => {
     snackService = jasmine.createSpyObj<SnackService>('SnackService', ['open']);
     localActions$ = new Subject<Action>();
     dataLoaded$ = new BehaviorSubject(true);
+    mainListTaskIds$ = new BehaviorSubject<string[]>(['task-1']);
+    matDialog = jasmine.createSpyObj<MatDialog>('MatDialog', ['open']);
 
     TestBed.configureTestingModule({
       providers: [
@@ -132,6 +139,8 @@ describe('OnboardingHintService', () => {
         { provide: TaskService, useValue: taskService },
         { provide: SnackService, useValue: snackService },
         { provide: LOCAL_ACTIONS, useValue: localActions$ },
+        { provide: WorkContextService, useValue: { mainListTaskIds$ } },
+        { provide: MatDialog, useValue: matDialog },
       ],
     });
     store = TestBed.inject(MockStore);
@@ -205,6 +214,7 @@ describe('OnboardingHintService', () => {
 
   it('counts a task created outside the global add-task bar', () => {
     // e.g. planner inline add, boards, share: all dispatch addTask locally
+    mainListTaskIds$.next(['planner-task']);
     const service = createService();
     addFirstTask(service, 'planner-task');
     expect(service.currentStep()).toBe('track-offer');
@@ -267,22 +277,56 @@ describe('OnboardingHintService', () => {
     expect(localStorage.getItem(LS.ONBOARDING_HINTS_DONE)).toBe('true');
   });
 
-  it('explains pausing once tracking starts, naming the running task', () => {
+  it('ends guidance once tracking starts, however it was started', () => {
     const service = createService();
     addFirstTask(service);
     expect(service.currentStep()).toBe('track-offer');
 
-    // Started via the header play button, a task play button or a shortcut.
+    // Header play button, a task play button or a shortcut.
     currentTaskId.set('task-1');
-    TestBed.tick();
-    expect(service.currentStep()).toBe('pause-hint');
-    expect(service.currentTaskTitle()).toBe('task-1');
-    expect(globalConfigService.updateSection).not.toHaveBeenCalled();
-
-    currentTaskId.set(null);
     TestBed.tick();
     expect(service.currentStep()).toBeNull();
     expect(localStorage.getItem(LS.ONBOARDING_HINTS_DONE)).toBe('true');
+    expect(globalConfigService.updateSection).not.toHaveBeenCalled();
+  });
+
+  it('names the task the play button would start, not just the new one', () => {
+    const service = createService();
+    addFirstTask(service);
+    expect(service.playTargetTask()?.id).toBe('task-1');
+
+    // Another undone task sits above the new one in the current list.
+    setTasks([makeTask('other'), makeTask('task-1')]);
+    mainListTaskIds$.next(['other', 'task-1']);
+    TestBed.tick();
+    expect(service.playTargetTask()?.id).toBe('other');
+  });
+
+  it('stays quiet while play has nothing to start in the current list', () => {
+    const service = createService();
+    mainListTaskIds$.next([]);
+    addFirstTask(service);
+    expect(service.currentStep()).toBeNull();
+    expect(localStorage.getItem(LS.ONBOARDING_HINTS_DONE)).toBeNull();
+
+    mainListTaskIds$.next(['task-1']);
+    TestBed.tick();
+    expect(service.currentStep()).toBe('track-offer');
+  });
+
+  it('hides hints while the sync dialog is open', async () => {
+    const afterClosed$ = new Subject<void>();
+    matDialog.open.and.returnValue({
+      afterClosed: () => afterClosed$,
+    } as unknown as ReturnType<MatDialog['open']>);
+    const service = createService();
+
+    await service.openSyncSetup();
+    expect(matDialog.open).toHaveBeenCalledTimes(1);
+    expect(service.currentStep()).toBeNull();
+
+    afterClosed$.next();
+    expect(service.currentStep()).toBe('create-task');
   });
 
   it('switches features off only when the user picks a to-do list', () => {
@@ -301,6 +345,21 @@ describe('OnboardingHintService', () => {
     ).toBeTrue();
     expect(snackService.open).toHaveBeenCalledTimes(1);
     expect(service.currentStep()).toBeNull();
+
+    // Undo restores exactly the switches that were changed.
+    const snackParams = snackService.open.calls.mostRecent().args[0] as unknown as {
+      actionFn: () => void;
+    };
+    snackParams.actionFn();
+    expect(globalConfigService.updateSection).toHaveBeenCalledWith(
+      'appFeatures',
+      jasmine.objectContaining({
+        isTimeTrackingEnabled: true,
+        isFocusModeEnabled: true,
+        isHabitsEnabled: true,
+      }),
+      true,
+    );
     expect(localStorage.getItem(LS.ONBOARDING_HINTS_DONE)).toBe('true');
   });
 

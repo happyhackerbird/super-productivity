@@ -1,8 +1,11 @@
 import { computed, effect, inject, Injectable, signal, untracked } from '@angular/core';
+import { toSignal } from '@angular/core/rxjs-interop';
+import { MatDialog } from '@angular/material/dialog';
 import { ofType } from '@ngrx/effects';
 import { Action, Store } from '@ngrx/store';
 import { Observable, Subscription } from 'rxjs';
 import { concatMap, filter, first } from 'rxjs/operators';
+import { Log } from '../../core/log';
 import { LS } from '../../core/persistence/storage-keys.const';
 import { LayoutService } from '../../core-ui/layout/layout.service';
 import { DataInitStateService } from '../../core/data-init/data-init-state.service';
@@ -11,15 +14,24 @@ import { isTouchActive } from '../../util/input-intent';
 import { LOCAL_ACTIONS } from '../../util/local-actions.token';
 import { TaskSharedActions } from '../../root-store/meta/task-shared.actions';
 import { T } from '../../t.const';
+import { AppFeaturesConfig } from '../config/global-config.model';
 import { GlobalConfigService } from '../config/global-config.service';
 import { ProjectService } from '../project/project.service';
 import { TaskService } from '../tasks/task.service';
-import { selectTaskEntities } from '../tasks/store/task.selectors';
+import { selectTaskFeatureState } from '../tasks/store/task.selectors';
+import { findTaskToStart } from '../tasks/util/find-task-to-start';
+import { WorkContextService } from '../work-context/work-context.service';
 import { SIMPLE_TODO_DISABLED_FEATURES } from './onboarding-presets.const';
 
-export type OnboardingStep = 'create-task' | 'track-offer' | 'pause-hint';
+type DialogSyncCfgComponentType =
+  typeof import('../../imex/sync/dialog-sync-cfg/dialog-sync-cfg.component').DialogSyncCfgComponent;
 
-type OnboardingPhase = 'idle' | 'await-first-task' | 'track-offer' | 'pause-hint';
+export type OnboardingStep = 'create-task' | 'track-offer';
+
+type OnboardingPhase = 'idle' | 'await-first-task' | 'track-offer';
+
+/** Undo for "I only need a to-do list" must stay reachable (WCAG 2.2.1). */
+const SIMPLIFIED_SNACK_DURATION_MS = 10000;
 
 /** More projects than the default ones means this is not a new user. */
 const RETURNING_USER_MIN_PROJECTS = 3;
@@ -29,12 +41,12 @@ const RETURNING_USER_MIN_PROJECTS = 3;
  *
  * 1. Point at "+" until the user creates their first real task (any local
  *    creation path; example tasks and repeat instances do not count).
- * 2. Point at the existing header play button: press play to track time, or
- *    simplify to a to-do list. Ignoring the offer changes nothing. Feature
+ * 2. Point at the existing header play button, naming the task it would start.
+ *    Starting tracking (from anywhere) ends guidance; the pause button and the
+ *    time on the task row confirm it. "I only need a to-do list" switches
+ *    features off (with undo). Ignoring the offer changes nothing: feature
  *    settings are only written on an explicit choice, because appFeatures sync
  *    to the user's other devices.
- * 3. Once tracking runs (started from anywhere), name the running task on the
- *    same button and explain pausing, until tracking stops.
  *
  * No step advances on a timer. Reloading after the first task ends guidance.
  */
@@ -46,14 +58,20 @@ export class OnboardingHintService {
   private _projectService = inject(ProjectService);
   private _globalConfigService = inject(GlobalConfigService);
   private _snackService = inject(SnackService);
+  private _matDialog = inject(MatDialog);
   private _store = inject(Store);
   private _localActions$: Observable<Action> = inject(LOCAL_ACTIONS);
 
   private _phase = signal<OnboardingPhase>('idle');
+  private _isSyncDialogOpen = signal(false);
   private _isFirstTaskComposerAutoCloseUsed = false;
   private _startSub: Subscription | null = null;
   private _taskAddSub: Subscription | null = null;
-  private _taskEntities = this._store.selectSignal(selectTaskEntities);
+  private _taskState = this._store.selectSignal(selectTaskFeatureState);
+  private _taskEntities = computed(() => this._taskState().entities);
+  private _mainListTaskIds = toSignal(inject(WorkContextService).mainListTaskIds$, {
+    initialValue: [] as string[],
+  });
 
   readonly offerTaskId = signal<string | null>(null);
 
@@ -62,24 +80,23 @@ export class OnboardingHintService {
     return id ? (this._taskEntities()[id] ?? null) : null;
   });
 
-  readonly currentTaskTitle = computed(() => {
-    const id = this._taskService.currentTaskId();
-    return id ? (this._taskEntities()[id]?.title ?? '') : '';
+  /** The task the header play button would start; the offer names exactly this one. */
+  readonly playTargetTask = computed(() => {
+    const id = findTaskToStart(this._taskState(), this._mainListTaskIds());
+    return id ? (this._taskEntities()[id] ?? null) : null;
   });
 
-  /** Hints hide while the composer is open. */
+  /** Hints hide while the composer or the sync dialog is open. */
   readonly currentStep = computed<OnboardingStep | null>(() => {
     const phase = this._phase();
-    if (phase === 'pause-hint') {
-      return 'pause-hint';
-    }
-    if (this._layoutService.isShowAddTaskBar()) {
+    if (this._layoutService.isShowAddTaskBar() || this._isSyncDialogOpen()) {
       return null;
     }
     if (phase === 'await-first-task') {
       return 'create-task';
     }
-    if (phase === 'track-offer' && this.offerTask()) {
+    // Nothing play could start here (e.g. the task went to another list): stay quiet.
+    if (phase === 'track-offer' && this.offerTask() && this.playTargetTask()) {
       return 'track-offer';
     }
     return null;
@@ -105,13 +122,9 @@ export class OnboardingHintService {
     });
 
     // Tracking started (header play button, task play button, shortcut, ...):
-    // explain pausing. Pausing, or tracking being turned off, then ends guidance.
+    // the pause button and the time on the task confirm it, so guidance ends.
     effect(() => {
-      const phase = this._phase();
-      const isTracking = this._taskService.currentTaskId() !== null;
-      if (phase === 'track-offer' && isTracking) {
-        this._phase.set('pause-hint');
-      } else if (phase === 'pause-hint' && !isTracking) {
+      if (this._phase() === 'track-offer' && this._taskService.currentTaskId() !== null) {
         untracked(() => this._markDone());
       }
     });
@@ -180,6 +193,16 @@ export class OnboardingHintService {
     if (this._phase() !== 'track-offer') {
       return;
     }
+    const current = this._globalConfigService.appFeatures();
+    const previous = Object.fromEntries(
+      Object.keys(SIMPLE_TODO_DISABLED_FEATURES).map((key) => [
+        key,
+        current[key as keyof AppFeaturesConfig],
+      ]),
+    ) as Partial<AppFeaturesConfig>;
+
+    // End guidance first: the hint is anchored to the play button being hidden.
+    this._markDone();
     // Only switch features off; never re-enable something the user hid.
     this._globalConfigService.updateSection(
       'appFeatures',
@@ -189,8 +212,31 @@ export class OnboardingHintService {
     this._snackService.open({
       type: 'SUCCESS',
       msg: T.ONBOARDING.HINTS.SIMPLIFIED,
+      actionStr: T.G.UNDO,
+      actionFn: () =>
+        this._globalConfigService.updateSection('appFeatures', previous, true),
+      config: { duration: SIMPLIFIED_SNACK_DURATION_MS },
     });
-    this._markDone();
+  }
+
+  async openSyncSetup(): Promise<void> {
+    if (this._isSyncDialogOpen()) {
+      return;
+    }
+    this._isSyncDialogOpen.set(true);
+    let DialogSyncCfgComponent: DialogSyncCfgComponentType;
+    try {
+      ({ DialogSyncCfgComponent } =
+        await import('../../imex/sync/dialog-sync-cfg/dialog-sync-cfg.component'));
+    } catch (e) {
+      this._isSyncDialogOpen.set(false);
+      Log.err('OnboardingHintService: failed to load sync dialog', e);
+      return;
+    }
+    this._matDialog
+      .open(DialogSyncCfgComponent)
+      .afterClosed()
+      .subscribe(() => this._isSyncDialogOpen.set(false));
   }
 
   private _onFirstTaskCandidate(taskId: string): void {

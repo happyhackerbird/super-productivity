@@ -2,6 +2,7 @@ import { LiveAnnouncer } from '@angular/cdk/a11y';
 import {
   ChangeDetectionStrategy,
   Component,
+  computed,
   DestroyRef,
   ElementRef,
   effect,
@@ -24,6 +25,8 @@ import { truncate } from '../../util/truncate';
 /** Max retries when target element is not yet in the DOM */
 const MAX_POSITION_RETRIES = 10;
 const POSITION_RETRY_DELAY_MS = 120;
+/** Keeps the offer to about two lines in the 260px chip */
+const MAX_TITLE_LENGTH = 32;
 
 interface StepConfig {
   selector: (isMobile: boolean) => string;
@@ -56,16 +59,6 @@ const STEP_CONFIGS = new Map<OnboardingStep, StepConfig>([
       isPulse: true,
     },
   ],
-  [
-    'pause-hint',
-    {
-      selector: () => '.tour-playBtn',
-      message: T.ONBOARDING.HINTS.PAUSE,
-      touchMessage: T.ONBOARDING.HINTS.PAUSE_TOUCH,
-      showShortcut: false,
-      isPulse: false,
-    },
-  ],
 ]);
 
 interface HintPosition {
@@ -87,7 +80,10 @@ export class OnboardingHintComponent {
   onboardingHintService = inject(OnboardingHintService);
   hintPosition = signal<HintPosition | null>(null);
   hintMessage = signal<string>('');
-  hintMessageParams = signal<Record<string, string>>({});
+  readonly hintMessageParams = computed(() => {
+    const step = this.onboardingHintService.currentStep();
+    return step ? this._getMessageParams(step) : {};
+  });
   shortcutHint = signal<string | null>(null);
 
   private _globalConfigService = inject(GlobalConfigService);
@@ -163,6 +159,10 @@ export class OnboardingHintComponent {
     this.onboardingHintService.simplifyToTodoList();
   }
 
+  openSyncSetup(): void {
+    void this.onboardingHintService.openSyncSetup();
+  }
+
   private _announce(step: OnboardingStep): void {
     const config = STEP_CONFIGS.get(step);
     if (!config) {
@@ -177,11 +177,16 @@ export class OnboardingHintComponent {
   }
 
   private _getMessageParams(step: OnboardingStep): Record<string, string> {
-    if (step !== 'pause-hint') {
+    if (step !== 'track-offer') {
       return {};
     }
-    // Name the task that is actually running, which may not be the one just added.
-    return { title: truncate(this.onboardingHintService.currentTaskTitle()) };
+    // Exactly the task the play button would start, kept live if it changes.
+    return {
+      title: truncate(
+        this.onboardingHintService.playTargetTask()?.title ?? '',
+        MAX_TITLE_LENGTH,
+      ),
+    };
   }
 
   /** Re-anchor on scroll/resize, or attach once the target appears. */
@@ -280,7 +285,6 @@ export class OnboardingHintComponent {
     this.hintMessage.set(
       isTouchActive() ? (config.touchMessage ?? config.message) : config.message,
     );
-    this.hintMessageParams.set(this._getMessageParams(step));
     if (!isTouchActive() && config.showShortcut) {
       const shortcut = this._globalConfigService.cfg()?.keyboard?.addNewTask;
       this.shortcutHint.set(shortcut || null);
