@@ -146,6 +146,12 @@
   margin-top: var(--s2);
 }
 
+// The first group follows the Add row. Give later groups the same space
+// between task blocks so every group boundary reads alike.
+.task-group + .task-group {
+  margin-top: calc(var(--s2) + var(--s4) + var(--s-half));
+}
+
 // The regular task list is the first group in Plan view.
 .normal-tasks-items--framed {
   --planner-group-c: #8b5cf6;
