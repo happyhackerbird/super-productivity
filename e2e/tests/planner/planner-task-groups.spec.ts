@@ -231,6 +231,99 @@ test.describe('Planner task groups', () => {
     );
   });
 
+  test('a third group remains separate when the day becomes overdue', async ({
+    page,
+  }) => {
+    await page.clock.install();
+    await page.reload();
+    await new PlannerPage(page).navigateToPlanner();
+    today = page.locator('planner-day').first();
+
+    for (const title of ['Gamma', 'Beta', 'Alpha']) {
+      await startGroupWith(page, title);
+      await expect(today.locator(TASK_GROUP)).toHaveCount(
+        ['Gamma', 'Beta', 'Alpha'].indexOf(title) + 1,
+      );
+      await page.clock.setSystemTime(Date.now() + 1);
+    }
+
+    await page.waitForTimeout(1000);
+    await page.clock.setSystemTime(Date.now() + ONE_DAY_MS);
+    await page.reload();
+    await new PlannerPage(page).navigateToPlanner();
+
+    const overdue = page.locator('planner-day-overdue');
+    await expect(overdue.locator(TASK_GROUP)).toHaveCount(3);
+    for (const [index, title] of ['Gamma', 'Beta', 'Alpha'].entries()) {
+      await expect(
+        overdue.locator(TASK_GROUP).nth(index).locator('planner-task'),
+      ).toContainText(title);
+    }
+  });
+
+  test('Cmd-click selects a group and dragging a member moves the group to another day', async ({
+    page,
+  }) => {
+    await startGroupWith(page, 'Gamma');
+    await dragIntoGroup(page, 'Beta');
+    const sourceGroup = today.locator(TASK_GROUP).first();
+    await expect(sourceGroup.locator('planner-task')).toHaveCount(2);
+
+    await page.keyboard.down('Meta');
+    await sourceGroup.locator('planner-task').first().click();
+    await page.keyboard.up('Meta');
+    await expect(sourceGroup.locator('planner-task.isMultiSelected')).toHaveCount(2);
+
+    const tomorrow = page.locator('planner-day').nth(1);
+    await dragTo(page, sourceGroup.locator('planner-task').last(), () =>
+      centerOf(tomorrow.locator(NEW_GROUP_DROP_ZONE)),
+    );
+
+    await expect(today.locator(TASK_GROUP)).toHaveCount(0);
+    await expect(tomorrow.locator(TASK_GROUP)).toHaveCount(1);
+    await expect(tomorrow.locator(`${TASK_GROUP} planner-task`)).toHaveCount(2);
+    await expect(tomorrow.locator(`${TASK_GROUP} planner-task`).first()).toContainText(
+      'Gamma',
+    );
+    await expect(tomorrow.locator(`${TASK_GROUP} planner-task`).last()).toContainText(
+      'Beta',
+    );
+
+    await page.reload();
+    await new PlannerPage(page).navigateToPlanner();
+    await expect(page.locator('planner-day').first().locator(TASK_GROUP)).toHaveCount(0);
+    const reloadedGroup = page.locator('planner-day').nth(1).locator(TASK_GROUP);
+    await expect(reloadedGroup).toHaveCount(1);
+    await expect(reloadedGroup.locator('planner-task')).toHaveCount(2);
+  });
+
+  test('an overdue group can be moved together to a future day', async ({ page }) => {
+    await page.clock.install();
+    await page.reload();
+    await new PlannerPage(page).navigateToPlanner();
+    today = page.locator('planner-day').first();
+    await startGroupWith(page, 'Gamma');
+    await dragIntoGroup(page, 'Beta');
+
+    await page.clock.setSystemTime(Date.now() + ONE_DAY_MS);
+    await page.reload();
+    await new PlannerPage(page).navigateToPlanner();
+    const overdueGroup = page.locator(`planner-day-overdue ${TASK_GROUP}`).first();
+    await expect(overdueGroup.locator('planner-task')).toHaveCount(2);
+
+    await page.keyboard.down('Meta');
+    await overdueGroup.locator('planner-task').last().click();
+    await page.keyboard.up('Meta');
+    await expect(overdueGroup.locator('planner-task.isMultiSelected')).toHaveCount(2);
+
+    const tomorrow = page.locator('planner-day').nth(1);
+    await dragTo(page, overdueGroup.locator('planner-task').first(), () =>
+      centerOf(tomorrow.locator(NEW_GROUP_DROP_ZONE)),
+    );
+    await expect(overdueGroup).toHaveCount(0);
+    await expect(tomorrow.locator(`${TASK_GROUP} planner-task`)).toHaveCount(2);
+  });
+
   test('grouping survives a reload', async ({ page }) => {
     await startGroupWith(page, 'Gamma');
     await dragIntoGroup(page, 'Alpha');

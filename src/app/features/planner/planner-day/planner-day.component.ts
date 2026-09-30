@@ -42,8 +42,13 @@ import { safeFormatDate } from '../../../util/safe-format-date';
 import { selectPlannerState } from '../store/planner.selectors';
 import { selectTodayTaskIds } from '../../work-context/store/work-context.selectors';
 import { selectTodayTagTaskIds } from '../../tag/store/tag.reducer';
-import { createPlannerGroupId } from '../store/planner-task-groups.util';
+import {
+  buildPlannerGroupValue,
+  createPlannerGroupId,
+} from '../store/planner-task-groups.util';
 import { planGroupDrop } from './plan-group-drop.util';
+import { TaskMultiSelectService } from '../../tasks/task-multi-select.service';
+import { SUPER_SYNC_MAX_ENTITY_IDS_PER_OP } from '@sp/shared-schema';
 
 @Component({
   selector: 'planner-day',
@@ -76,6 +81,7 @@ export class PlannerDayComponent {
   private _layoutService = inject(LayoutService);
   private _dateTimeFormatService = inject(DateTimeFormatService);
   private _hostElement = inject(ElementRef<HTMLElement>);
+  private _multiSelect = inject(TaskMultiSelectService);
 
   // TODO: Skipped for migration because:
   //  This input is used in a control flow expression (e.g. `@if` or `*ngIf`)
@@ -151,6 +157,10 @@ export class PlannerDayComponent {
     const newDay = ev.container.data;
     const task = ev.item.data;
 
+    if (this._dropSelectedGroupOnDay(ev)) {
+      return;
+    }
+
     if (targetList === 'SCHEDULED') {
       if (ev.previousContainer !== ev.container) {
         this.editTaskReminderOrReScheduleIfPossible(task, ev.container.data);
@@ -201,6 +211,9 @@ export class PlannerDayComponent {
     groupTasks: TaskCopy[],
     ev: CdkDragDrop<string, string, TaskCopy>,
   ): void {
+    if (this._dropSelectedGroupOnDay(ev)) {
+      return;
+    }
     this._dropInTaskList(groupId, groupTasks, ev);
   }
 
@@ -212,7 +225,72 @@ export class PlannerDayComponent {
     if (!ev.isPointerOverContainer && !this._isInNewGroupDropArea(ev)) {
       return;
     }
+    if (this._dropSelectedGroupOnDay(ev)) {
+      return;
+    }
     this._dropInTaskList(createPlannerGroupId(), [], ev);
+  }
+
+  private _dropSelectedGroupOnDay(ev: CdkDragDrop<string, string, TaskCopy>): boolean {
+    if (!ev.previousContainer.element.nativeElement.classList.contains('task-group')) {
+      return false;
+    }
+    const sourceTasks = ev.previousContainer
+      .getSortedItems()
+      .map((item) => item.data as TaskCopy);
+    const selected = this._multiSelect.selectedIds();
+    if (
+      !sourceTasks.length ||
+      selected.size !== sourceTasks.length ||
+      !sourceTasks.every(
+        (task) =>
+          selected.has(task.id) && task.plannerGroup === ev.item.data.plannerGroup,
+      )
+    ) {
+      return false;
+    }
+    const prevDay = ev.previousContainer.data;
+    const newDay = ev.container.data;
+    if (prevDay !== newDay) {
+      // Let CDK remove its drag placeholder before the source group disappears.
+      setTimeout(() => this._transferSelectedGroup(sourceTasks, prevDay, newDay), 0);
+    }
+    return true;
+  }
+
+  private _transferSelectedGroup(
+    tasks: TaskCopy[],
+    prevDay: string,
+    newDay: string,
+  ): void {
+    const today = this._dateService.todayStr();
+    const targetIndex =
+      newDay === today
+        ? this._storedTodayTaskIds().length
+        : (this._plannerState().days[newDay] || []).length;
+    const groupValue = buildPlannerGroupValue(newDay, createPlannerGroupId());
+    tasks.forEach((task, index) =>
+      this._store.dispatch(
+        PlannerActions.transferTask({
+          task,
+          prevDay,
+          newDay,
+          targetIndex: targetIndex + index,
+          today,
+        }),
+      ),
+    );
+    for (let i = 0; i < tasks.length; i += SUPER_SYNC_MAX_ENTITY_IDS_PER_OP) {
+      this._store.dispatch(
+        TaskSharedActions.updateTasks({
+          tasks: tasks.slice(i, i + SUPER_SYNC_MAX_ENTITY_IDS_PER_OP).map((task) => ({
+            id: task.id,
+            changes: { plannerGroup: groupValue },
+          })),
+        }),
+      );
+    }
+    this._multiSelect.clear();
   }
 
   private _isInNewGroupDropArea(ev: CdkDragDrop<string, string, TaskCopy>): boolean {

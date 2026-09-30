@@ -162,6 +162,22 @@ export class TaskMultiSelectService {
     }
   }
 
+  /** Cmd/Ctrl-click on a Planner group selects its visible members as one unit. */
+  togglePlannerGroup(
+    ids: readonly string[],
+    anchorId: string,
+    anchorRow: HTMLElement,
+  ): void {
+    if (!ids.length) return;
+    const selected = this._selectedIds();
+    if (selected.size === ids.length && ids.every((id) => selected.has(id))) {
+      this.clear();
+      return;
+    }
+    this._setSelectedIds(new Set(ids));
+    this._setAnchor(anchorId, anchorRow);
+  }
+
   /**
    * Shift+click: select everything between the anchor and `targetId` in the
    * anchor's list, replacing the selection. When there is no anchor (nothing

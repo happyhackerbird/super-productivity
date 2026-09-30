@@ -313,7 +313,21 @@ export class PlannerTaskComponent implements OnInit, OnDestroy, AfterViewInit {
           host.focus();
         } else {
           host.focus();
-          this._multiSelect.toggle(this.task().id);
+          const group = host.closest<HTMLElement>(
+            'planner-day .task-group, planner-day-overdue .task-group',
+          );
+          if (group) {
+            const ids = Array.from(
+              group.querySelectorAll<HTMLElement>(
+                'planner-task[data-task-selectable="true"]',
+              ),
+            )
+              .map((row) => row.dataset.taskId)
+              .filter((id): id is string => !!id);
+            this._multiSelect.togglePlannerGroup(ids, this.task().id, host);
+          } else {
+            this._multiSelect.toggle(this.task().id);
+          }
         }
       };
       const preventShiftSelection = (event: MouseEvent): void => {
