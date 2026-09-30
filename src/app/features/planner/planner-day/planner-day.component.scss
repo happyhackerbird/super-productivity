@@ -139,15 +139,15 @@
   flex-grow: 1;
 }
 
-// Groups sit below the list with a gap and a purple frame (see .task-group).
+// Groups sit below the list with a gap.
 .task-group,
 .new-task-group-drop-zone {
   min-height: var(--planner-item-height);
   margin-top: var(--s2);
 }
 
-// A group is framed in purple so it reads as one unit apart from the list.
-.task-group {
+// Frame only the first group; later groups remain visually distinct by their gap.
+.task-group--first {
   --planner-group-c: #8b5cf6;
   padding: var(--s-half) var(--s-half) 0;
   border: 1px solid color-mix(in srgb, var(--planner-group-c) 45%, transparent);

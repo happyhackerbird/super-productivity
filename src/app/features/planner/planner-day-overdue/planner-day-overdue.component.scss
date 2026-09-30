@@ -167,8 +167,8 @@
   height: 0;
 }
 
-// A group is framed in purple so it reads as one unit apart from the list.
-.task-group {
+// Match the first group's frame in the day view.
+.task-group--first {
   margin-top: var(--s2);
   --planner-group-c: #8b5cf6;
   padding: var(--s-half) var(--s-half) 0;

@@ -35,9 +35,10 @@
     }
   </div>
 
-  @for (group of partitioned().taskGroups; track group.id) {
+  @for (group of partitioned().taskGroups; track group.id; let first = $first) {
     <div
       class="task-group"
+      [class.task-group--first]="first"
       cdkDropList
       [attr.data-task-group]="group.id"
       [cdkDropListSortingDisabled]="true"
