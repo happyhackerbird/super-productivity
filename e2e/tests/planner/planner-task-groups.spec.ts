@@ -28,6 +28,7 @@ const dragTo = async (
   page: Page,
   source: Locator,
   getTarget: () => Promise<Point>,
+  getFinalTarget: () => Promise<Point> = getTarget,
 ): Promise<void> => {
   const from = await centerOf(source);
   await page.mouse.move(from.x, from.y);
@@ -36,7 +37,7 @@ const dragTo = async (
   const firstAim = await getTarget();
   await page.mouse.move(firstAim.x, firstAim.y, { steps: 20 });
   await expect(page.locator('.cdk-drag-placeholder')).toBeVisible();
-  const to = await getTarget();
+  const to = await getFinalTarget();
   await page.mouse.move(to.x, to.y, { steps: 8 });
   await page.mouse.move(to.x, to.y + 1, { steps: 2 });
   await page.mouse.up();
@@ -49,15 +50,36 @@ test.describe('Planner task groups', () => {
   const taskInToday = (title: string): Locator =>
     today.locator('planner-task').filter({ hasText: title });
 
-  const startGroupWith = async (page: Page, title: string): Promise<void> => {
-    await dragTo(page, taskInToday(title), () =>
-      centerOf(today.locator(NEW_GROUP_DROP_ZONE)),
+  const startGroupWith = async (
+    page: Page,
+    title: string,
+    belowZone = false,
+  ): Promise<void> => {
+    const zoneCenter = (): Promise<Point> => centerOf(today.locator(NEW_GROUP_DROP_ZONE));
+    const belowZonePoint = async (): Promise<Point> => {
+      const zone = today.locator(NEW_GROUP_DROP_ZONE);
+      const center = await centerOf(zone);
+      const box = await zone.boundingBox();
+      if (!box) {
+        throw new Error('New group drop zone is not visible');
+      }
+      return { x: center.x, y: box.y + box.height + 20 };
+    };
+    await dragTo(
+      page,
+      taskInToday(title),
+      zoneCenter,
+      belowZone ? belowZonePoint : zoneCenter,
     );
   };
 
-  const dragIntoGroup = async (page: Page, title: string): Promise<void> => {
+  const dragIntoGroup = async (
+    page: Page,
+    title: string,
+    groupIndex = 0,
+  ): Promise<void> => {
     await dragTo(page, taskInToday(title), async () => {
-      const box = await today.locator(TASK_GROUP).first().boundingBox();
+      const box = await today.locator(TASK_GROUP).nth(groupIndex).boundingBox();
       if (!box) {
         throw new Error('Task group is not visible');
       }
@@ -112,6 +134,36 @@ test.describe('Planner task groups', () => {
       today.locator(`${TASK_GROUP} planner-task`).filter({ hasText: 'Alpha' }),
     ).toHaveCount(1);
     await expect(today.locator(`${UNGROUPED_LIST} planner-task`)).toHaveCount(1);
+    await expect(page.locator(SCHEDULE_DIALOG)).toHaveCount(0);
+  });
+
+  test('splitting a group can be repeated after later groups', async ({ page }) => {
+    await startGroupWith(page, 'Gamma');
+    await expect(today.locator(TASK_GROUP)).toHaveCount(1);
+    await dragIntoGroup(page, 'Beta');
+    await expect(today.locator(`${TASK_GROUP} planner-task`)).toHaveCount(2);
+
+    await startGroupWith(page, 'Beta');
+
+    await expect(today.locator(TASK_GROUP)).toHaveCount(2);
+    await expect(today.locator(TASK_GROUP).first().locator('planner-task')).toContainText(
+      'Gamma',
+    );
+    await expect(today.locator(TASK_GROUP).last().locator('planner-task')).toContainText(
+      'Beta',
+    );
+
+    await dragIntoGroup(page, 'Alpha', 1);
+    await expect(today.locator(TASK_GROUP).last().locator('planner-task')).toHaveCount(2);
+    await startGroupWith(page, 'Alpha', true);
+
+    await expect(today.locator(TASK_GROUP)).toHaveCount(3);
+    await expect(today.locator(TASK_GROUP).nth(1).locator('planner-task')).toContainText(
+      'Beta',
+    );
+    await expect(today.locator(TASK_GROUP).last().locator('planner-task')).toContainText(
+      'Alpha',
+    );
     await expect(page.locator(SCHEDULE_DIALOG)).toHaveCount(0);
   });
 

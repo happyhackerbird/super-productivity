@@ -2,6 +2,7 @@ import {
   ChangeDetectionStrategy,
   Component,
   computed,
+  ElementRef,
   HostBinding,
   inject,
   input,
@@ -74,6 +75,7 @@ export class PlannerDayComponent {
   private _dateService = inject(DateService);
   private _layoutService = inject(LayoutService);
   private _dateTimeFormatService = inject(DateTimeFormatService);
+  private _hostElement = inject(ElementRef<HTMLElement>);
 
   // TODO: Skipped for migration because:
   //  This input is used in a control flow expression (e.g. `@if` or `*ngIf`)
@@ -203,11 +205,30 @@ export class PlannerDayComponent {
   }
 
   dropInNewGroup(ev: CdkDragDrop<string, string, TaskCopy>): void {
-    // cdk keeps the last entered list as drop target, even if the pointer left it
-    if (!ev.isPointerOverContainer) {
+    // CDK keeps the last entered list as the drop target after the pointer
+    // leaves it. Its overlap flag can also be stale after the placeholder moves
+    // the zone. Use the release point to accept the zone itself and, on a day
+    // without scheduled items, the blank column space below it.
+    if (!ev.isPointerOverContainer && !this._isInNewGroupDropArea(ev)) {
       return;
     }
     this._dropInTaskList(createPlannerGroupId(), [], ev);
+  }
+
+  private _isInNewGroupDropArea(ev: CdkDragDrop<string, string, TaskCopy>): boolean {
+    if (!ev.dropPoint) {
+      return false;
+    }
+    const zone = ev.container.element.nativeElement.getBoundingClientRect();
+    const { x, y } = ev.dropPoint;
+    if (x < zone.left || x > zone.right || y < zone.top) {
+      return false;
+    }
+    return (
+      y <= zone.bottom ||
+      (this.day.scheduledIItems.length === 0 &&
+        y <= this._hostElement.nativeElement.getBoundingClientRect().bottom)
+    );
   }
 
   private _dropInTaskList(
