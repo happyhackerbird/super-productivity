@@ -126,7 +126,7 @@ test.describe('Planner task groups', () => {
     await expect(page.locator(SCHEDULE_DIALOG)).toHaveCount(0);
   });
 
-  test('two groups stay separate when overdue, with only the first framed', async ({
+  test('the regular day list is framed and two groups stay separate when overdue', async ({
     page,
   }) => {
     await page.clock.install();
@@ -136,12 +136,11 @@ test.describe('Planner task groups', () => {
     await startGroupWith(page, 'Gamma');
     await page.clock.setSystemTime(Date.now() + 1);
     await startGroupWith(page, 'Beta');
-    await dragIntoGroup(page, 'Alpha');
-    await expect(today.locator(`${TASK_GROUP} planner-task`)).toHaveCount(3);
+    await expect(today.locator(`${TASK_GROUP} planner-task`)).toHaveCount(2);
     await expect(today.locator(TASK_GROUP)).toHaveCount(2);
-    await expect(today.locator(TASK_GROUP).first()).toHaveClass(/task-group--first/);
-    await expect(today.locator(TASK_GROUP).last()).not.toHaveClass(/task-group--first/);
-    await expect(today.locator(TASK_GROUP).first()).toHaveCSS('border-left-width', '1px');
+    await expect(today.locator(UNGROUPED_LIST)).toHaveClass(/normal-tasks-items--framed/);
+    await expect(today.locator(UNGROUPED_LIST)).toHaveCSS('border-left-width', '1px');
+    await expect(today.locator(TASK_GROUP).first()).toHaveCSS('border-left-width', '0px');
     await expect(today.locator(TASK_GROUP).last()).toHaveCSS('border-left-width', '0px');
 
     // give the operation log time to persist before moving to the next day
@@ -153,12 +152,15 @@ test.describe('Planner task groups', () => {
     const overdue = page.locator('planner-day-overdue');
     await expect(overdue.locator(TASK_GROUP)).toHaveCount(2);
     await expect(overdue.locator(TASK_GROUP).first().locator('planner-task')).toHaveCount(
-      2,
+      1,
     );
     await expect(overdue.locator(TASK_GROUP).last().locator('planner-task')).toHaveCount(
       1,
     );
-    await expect(overdue.locator(`${UNGROUPED_LIST} planner-task`)).toHaveCount(0);
+    await expect(overdue.locator(`${UNGROUPED_LIST} planner-task`)).toHaveCount(1);
+    await expect(
+      overdue.locator(`${UNGROUPED_LIST} planner-task`).filter({ hasText: 'Alpha' }),
+    ).toHaveCount(1);
     await expect(
       overdue
         .locator(TASK_GROUP)
@@ -166,11 +168,10 @@ test.describe('Planner task groups', () => {
         .locator('planner-task')
         .filter({ hasText: 'Beta' }),
     ).toHaveCount(1);
-    await expect(overdue.locator(TASK_GROUP).first()).toHaveClass(/task-group--first/);
-    await expect(overdue.locator(TASK_GROUP).last()).not.toHaveClass(/task-group--first/);
+    await expect(overdue.locator(UNGROUPED_LIST)).toHaveCSS('border-left-width', '0px');
     await expect(overdue.locator(TASK_GROUP).first()).toHaveCSS(
       'border-left-width',
-      '1px',
+      '0px',
     );
     await expect(overdue.locator(TASK_GROUP).last()).toHaveCSS(
       'border-left-width',

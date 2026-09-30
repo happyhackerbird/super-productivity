@@ -146,8 +146,8 @@
   margin-top: var(--s2);
 }
 
-// Frame only the first group; later groups remain visually distinct by their gap.
-.task-group--first {
+// The regular task list is the first group in Plan view.
+.normal-tasks-items--framed {
   --planner-group-c: #8b5cf6;
   padding: var(--s-half) var(--s-half) 0;
   border: 1px solid color-mix(in srgb, var(--planner-group-c) 45%, transparent);

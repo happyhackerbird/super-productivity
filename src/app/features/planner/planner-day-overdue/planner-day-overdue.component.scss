@@ -167,13 +167,6 @@
   height: 0;
 }
 
-// Match the first group's frame in the day view.
-.task-group--first {
+.task-group {
   margin-top: var(--s2);
-  --planner-group-c: #8b5cf6;
-  padding: var(--s-half) var(--s-half) 0;
-  border: 1px solid color-mix(in srgb, var(--planner-group-c) 45%, transparent);
-  border-radius: 12px;
-  background: color-mix(in srgb, var(--planner-group-c) 7%, transparent);
-  box-shadow: inset 3px 0 0 var(--planner-group-c);
 }

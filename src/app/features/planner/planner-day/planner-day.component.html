@@ -52,6 +52,9 @@
 <div class="normal-tasks">
   <div
     class="normal-tasks-items"
+    [class.normal-tasks-items--framed]="
+      isTaskGroupingEnabled() && ungroupedTasks.length > 0
+    "
     cdkDropList
     [cdkDropListData]="day.dayDate"
     [cdkDropListAutoScrollStep]="8"
@@ -101,10 +104,9 @@
   <add-task-inline [planForDay]="day.dayDate"></add-task-inline>
 
   @if (isTaskGroupingEnabled()) {
-    @for (group of day.taskGroups; track group.id; let first = $first) {
+    @for (group of day.taskGroups; track group.id) {
       <div
         class="task-group"
-        [class.task-group--first]="first"
         cdkDropList
         [attr.data-task-group]="group.id"
         [cdkDropListData]="day.dayDate"
