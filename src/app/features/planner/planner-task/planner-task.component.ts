@@ -144,6 +144,7 @@ export class PlannerTaskComponent implements OnInit, OnDestroy, AfterViewInit {
   private _doneAnimationTimeout?: number;
   private _dragReadyTimeout?: number;
   private _touchListenerCleanups: (() => void)[] = [];
+  private _modifierDragPointerDown = false;
 
   readonly taskContextMenu = viewChild('taskContextMenu', {
     read: TaskContextMenuComponent,
@@ -278,6 +279,15 @@ export class PlannerTaskComponent implements OnInit, OnDestroy, AfterViewInit {
     }
     if (this.focusable()) {
       const host = this._elementRef.nativeElement as HTMLElement;
+      const rememberModifierDrag = (event: MouseEvent): void => {
+        this._multiSelect.endPlannerGroupDrag();
+        this._modifierDragPointerDown =
+          event.button === 0 &&
+          (event.metaKey || event.ctrlKey) &&
+          !(event.target instanceof HTMLElement && isInputElement(event.target)) &&
+          !isLinkTarget(event.target) &&
+          this._plannerGroupIds(host).length > 0;
+      };
       const selectFromModifierClick = (event: MouseEvent): void => {
         const target = event.target;
         // Touch selection mode deliberately swallows links too: the whole row
@@ -313,17 +323,8 @@ export class PlannerTaskComponent implements OnInit, OnDestroy, AfterViewInit {
           host.focus();
         } else {
           host.focus();
-          const group = host.closest<HTMLElement>(
-            'planner-day .task-group, planner-day-overdue .task-group',
-          );
-          if (group) {
-            const ids = Array.from(
-              group.querySelectorAll<HTMLElement>(
-                'planner-task[data-task-selectable="true"]',
-              ),
-            )
-              .map((row) => row.dataset.taskId)
-              .filter((id): id is string => !!id);
+          const ids = this._plannerGroupIds(host);
+          if (ids.length) {
             this._multiSelect.togglePlannerGroup(ids, this.task().id, host);
           } else {
             this._multiSelect.toggle(this.task().id);
@@ -338,13 +339,33 @@ export class PlannerTaskComponent implements OnInit, OnDestroy, AfterViewInit {
           event.preventDefault();
         }
       };
+      host.addEventListener('mousedown', rememberModifierDrag, true);
       host.addEventListener('click', selectFromModifierClick, true);
       host.addEventListener('mousedown', preventShiftSelection, true);
       this._touchListenerCleanups.push(
+        () => host.removeEventListener('mousedown', rememberModifierDrag, true),
         () => host.removeEventListener('click', selectFromModifierClick, true),
         () => host.removeEventListener('mousedown', preventShiftSelection, true),
       );
     }
+  }
+
+  onPlannerGroupDragStarted(): void {
+    if (!this._modifierDragPointerDown) return;
+    this._modifierDragPointerDown = false;
+    this._multiSelect.beginPlannerGroupDrag(this.task().id);
+  }
+
+  private _plannerGroupIds(host: HTMLElement): string[] {
+    const group = host.closest<HTMLElement>(
+      'planner-day .task-group, planner-day-overdue .task-group',
+    );
+    if (!group) return [];
+    return Array.from(
+      group.querySelectorAll<HTMLElement>('planner-task[data-task-selectable="true"]'),
+    )
+      .map((row) => row.dataset.taskId)
+      .filter((id): id is string => !!id);
   }
 
   ngOnDestroy(): void {

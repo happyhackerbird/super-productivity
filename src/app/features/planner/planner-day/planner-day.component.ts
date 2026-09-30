@@ -239,16 +239,19 @@ export class PlannerDayComponent {
       .getSortedItems()
       .map((item) => item.data as TaskCopy);
     const selected = this._multiSelect.selectedIds();
+    const modifierDrag = this._multiSelect.isPlannerGroupDrag(ev.item.data.id);
     if (
       !sourceTasks.length ||
-      selected.size !== sourceTasks.length ||
+      (!modifierDrag && selected.size !== sourceTasks.length) ||
       !sourceTasks.every(
         (task) =>
-          selected.has(task.id) && task.plannerGroup === ev.item.data.plannerGroup,
+          (modifierDrag || selected.has(task.id)) &&
+          task.plannerGroup === ev.item.data.plannerGroup,
       )
     ) {
       return false;
     }
+    this._multiSelect.endPlannerGroupDrag();
     const prevDay = ev.previousContainer.data;
     const newDay = ev.container.data;
     if (prevDay !== newDay) {

@@ -311,16 +311,44 @@ test.describe('Planner task groups', () => {
     const overdueGroup = page.locator(`planner-day-overdue ${TASK_GROUP}`).first();
     await expect(overdueGroup.locator('planner-task')).toHaveCount(2);
 
-    await page.keyboard.down('Meta');
-    await overdueGroup.locator('planner-task').last().click();
-    await page.keyboard.up('Meta');
-    await expect(overdueGroup.locator('planner-task.isMultiSelected')).toHaveCount(2);
-
     const tomorrow = page.locator('planner-day').nth(1);
+    await page.keyboard.down('Meta');
     await dragTo(page, overdueGroup.locator('planner-task').first(), () =>
       centerOf(tomorrow.locator(NEW_GROUP_DROP_ZONE)),
     );
+    await page.keyboard.up('Meta');
     await expect(overdueGroup).toHaveCount(0);
+    await expect(tomorrow.locator(`${TASK_GROUP} planner-task`)).toHaveCount(2);
+  });
+
+  test('holding Command through selection and drag moves the whole group', async ({
+    page,
+  }) => {
+    await startGroupWith(page, 'Gamma');
+    await dragIntoGroup(page, 'Beta');
+    const group = today.locator(TASK_GROUP).first();
+    await page.keyboard.down('Meta');
+    await group.locator('planner-task .title').first().click();
+    await expect(group.locator('planner-task.isMultiSelected')).toHaveCount(2);
+    const tomorrow = page.locator('planner-day').nth(1);
+    await dragTo(page, group.locator('planner-task').last(), () =>
+      centerOf(tomorrow.locator(NEW_GROUP_DROP_ZONE)),
+    );
+    await page.keyboard.up('Meta');
+    await expect(tomorrow.locator(`${TASK_GROUP} planner-task`)).toHaveCount(2);
+  });
+
+  test('Command-drag in one gesture moves the whole group', async ({ page }) => {
+    await startGroupWith(page, 'Gamma');
+    await dragIntoGroup(page, 'Beta');
+    const group = today.locator(TASK_GROUP).first();
+    const tomorrow = page.locator('planner-day').nth(1);
+    await page.keyboard.down('Meta');
+    await dragTo(page, group.locator('planner-task').last(), () =>
+      centerOf(tomorrow.locator(NEW_GROUP_DROP_ZONE)),
+    );
+    await page.keyboard.up('Meta');
+    await expect(today.locator(TASK_GROUP)).toHaveCount(0, { timeout: 3000 });
     await expect(tomorrow.locator(`${TASK_GROUP} planner-task`)).toHaveCount(2);
   });
 

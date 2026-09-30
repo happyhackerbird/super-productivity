@@ -47,7 +47,9 @@
     >
       @for (task of group.tasks; track task.id) {
         <planner-task
+          #groupTask
           cdkDrag
+          (cdkDragStarted)="groupTask.onPlannerGroupDragStarted()"
           [cdkDragData]="task"
           [cdkDragStartDelay]="dragDelayForTouch()"
           [cdkDragLockAxis]="isXs() ? 'y' : ''"
