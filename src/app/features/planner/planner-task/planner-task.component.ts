@@ -9,6 +9,7 @@ import {
   HostListener,
   inject,
   input,
+  NgZone,
   OnDestroy,
   OnInit,
   signal,
@@ -108,6 +109,7 @@ export class PlannerTaskComponent implements OnInit, OnDestroy, AfterViewInit {
   private _store = inject(Store);
   private _dateService = inject(DateService);
   private _dateAdapter = inject(DateAdapter);
+  private _ngZone = inject(NgZone);
   private _isTaskDeleteTriggered = false;
   private _isDestroyed = false;
   private _completionFocusFallback?: {
@@ -145,6 +147,7 @@ export class PlannerTaskComponent implements OnInit, OnDestroy, AfterViewInit {
   private _dragReadyTimeout?: number;
   private _touchListenerCleanups: (() => void)[] = [];
   private _modifierDragPointerDown = false;
+  private _groupDragModifierCleanup?: () => void;
 
   readonly taskContextMenu = viewChild('taskContextMenu', {
     read: TaskContextMenuComponent,
@@ -351,9 +354,36 @@ export class PlannerTaskComponent implements OnInit, OnDestroy, AfterViewInit {
   }
 
   onPlannerGroupDragStarted(): void {
-    if (!this._modifierDragPointerDown) return;
-    this._modifierDragPointerDown = false;
-    this._multiSelect.beginPlannerGroupDrag(this.task().id);
+    const taskId = this.task().id;
+    if (this._modifierDragPointerDown) {
+      this._modifierDragPointerDown = false;
+      this._multiSelect.beginPlannerGroupDrag(taskId);
+      return;
+    }
+    // Command pressed only after the drag began still means "move the group".
+    // CDK has moved the host out of its group by now, so the DOM can't answer
+    // group membership; the drop handler re-checks the source list.
+    if (!this.task().plannerGroup) return;
+    const latch = (event: KeyboardEvent | MouseEvent): void => {
+      if (event.metaKey || event.ctrlKey) {
+        this._multiSelect.beginPlannerGroupDrag(taskId);
+      }
+    };
+    this._ngZone.runOutsideAngular(() => {
+      document.addEventListener('keydown', latch, true);
+      document.addEventListener('mousemove', latch, true);
+      document.addEventListener('mouseup', latch, true);
+    });
+    this._groupDragModifierCleanup = () => {
+      document.removeEventListener('keydown', latch, true);
+      document.removeEventListener('mousemove', latch, true);
+      document.removeEventListener('mouseup', latch, true);
+    };
+  }
+
+  onPlannerGroupDragEnded(): void {
+    this._groupDragModifierCleanup?.();
+    this._groupDragModifierCleanup = undefined;
   }
 
   private _plannerGroupIds(host: HTMLElement): string[] {
@@ -379,6 +409,7 @@ export class PlannerTaskComponent implements OnInit, OnDestroy, AfterViewInit {
     window.clearTimeout(this._doneAnimationTimeout);
     window.clearTimeout(this._dragReadyTimeout);
     this._touchListenerCleanups.forEach((fn) => fn());
+    this.onPlannerGroupDragEnded();
     if (
       this._completionFocusFallback &&
       document.activeElement === this._elementRef.nativeElement

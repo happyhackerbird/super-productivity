@@ -118,6 +118,7 @@
             #groupTask
             cdkDrag
             (cdkDragStarted)="groupTask.onPlannerGroupDragStarted()"
+            (cdkDragEnded)="groupTask.onPlannerGroupDragEnded()"
             [cdkDragData]="task"
             [cdkDragStartDelay]="dragDelayForTouch()"
             [cdkDragLockAxis]="isXs() ? 'y' : ''"

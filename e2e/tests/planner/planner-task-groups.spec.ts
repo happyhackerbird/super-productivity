@@ -305,6 +305,8 @@ test.describe('Planner task groups', () => {
     await startGroupWith(page, 'Gamma');
     await dragIntoGroup(page, 'Beta');
 
+    // give the operation log time to persist before moving to the next day
+    await page.waitForTimeout(1000);
     await page.clock.setSystemTime(Date.now() + ONE_DAY_MS);
     await page.reload();
     await new PlannerPage(page).navigateToPlanner();
@@ -350,6 +352,80 @@ test.describe('Planner task groups', () => {
     await page.keyboard.up('Meta');
     await expect(today.locator(TASK_GROUP)).toHaveCount(0, { timeout: 3000 });
     await expect(tomorrow.locator(`${TASK_GROUP} planner-task`)).toHaveCount(2);
+  });
+
+  // Pressing Command only once the task is already moving is how the gesture
+  // reads on a Mac: grab, then hold Command.
+  const dragPressingCommandMidway = async (
+    page: Page,
+    source: Locator,
+    target: Locator,
+  ): Promise<void> => {
+    const from = await centerOf(source);
+    await page.mouse.move(from.x, from.y);
+    await page.mouse.down();
+    await page.mouse.move(from.x + 6, from.y + 6, { steps: 4 });
+    await expect(page.locator('.cdk-drag-placeholder')).toBeVisible();
+    await page.keyboard.down('Meta');
+    const to = await centerOf(target);
+    await page.mouse.move(to.x, to.y, { steps: 20 });
+    const finalTo = await centerOf(target);
+    await page.mouse.move(finalTo.x, finalTo.y + 1, { steps: 4 });
+    await page.mouse.up();
+    await page.keyboard.up('Meta');
+    await expect(page.locator('.cdk-drag-preview')).toHaveCount(0);
+  };
+
+  test('Command pressed after the drag started moves the whole group', async ({
+    page,
+  }) => {
+    await startGroupWith(page, 'Gamma');
+    await dragIntoGroup(page, 'Beta');
+    const group = today.locator(TASK_GROUP).first();
+    const tomorrow = page.locator('planner-day').nth(1);
+    await dragPressingCommandMidway(
+      page,
+      group.locator('planner-task').last(),
+      tomorrow.locator(NEW_GROUP_DROP_ZONE),
+    );
+    await expect(today.locator(TASK_GROUP)).toHaveCount(0, { timeout: 3000 });
+    await expect(tomorrow.locator(`${TASK_GROUP} planner-task`)).toHaveText([
+      /Gamma/,
+      /Beta/,
+    ]);
+  });
+
+  test('Command pressed after the drag started moves a whole overdue group', async ({
+    page,
+  }) => {
+    await page.clock.install();
+    await page.reload();
+    await new PlannerPage(page).navigateToPlanner();
+    today = page.locator('planner-day').first();
+    await startGroupWith(page, 'Gamma');
+    await dragIntoGroup(page, 'Beta');
+
+    // give the operation log time to persist before moving to the next day
+    await page.waitForTimeout(1000);
+    await page.clock.setSystemTime(Date.now() + ONE_DAY_MS);
+    await page.reload();
+    await new PlannerPage(page).navigateToPlanner();
+    const overdueGroup = page.locator(`planner-day-overdue ${TASK_GROUP}`).first();
+    await expect(overdueGroup.locator('planner-task')).toHaveText([/Gamma/, /Beta/]);
+
+    const tomorrow = page.locator('planner-day').nth(1);
+    await dragPressingCommandMidway(
+      page,
+      overdueGroup.locator('planner-task').last(),
+      tomorrow.locator(NEW_GROUP_DROP_ZONE),
+    );
+    await expect(page.locator(`planner-day-overdue ${TASK_GROUP}`)).toHaveCount(0, {
+      timeout: 3000,
+    });
+    await expect(tomorrow.locator(`${TASK_GROUP} planner-task`)).toHaveText([
+      /Gamma/,
+      /Beta/,
+    ]);
   });
 
   test('grouping survives a reload', async ({ page }) => {
