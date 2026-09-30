@@ -53,6 +53,9 @@ describe('PlannerTaskComponent', () => {
     requestMenuOpen: jasmine.Spy;
     removeWhenUnrendered: jasmine.Spy;
     findLiveRowEl: jasmine.Spy;
+    togglePlannerGroup: jasmine.Spy;
+    beginPlannerGroupDrag: jasmine.Spy;
+    endPlannerGroupDrag: jasmine.Spy;
   };
 
   const create = (
@@ -102,6 +105,9 @@ describe('PlannerTaskComponent', () => {
       requestMenuOpen: jasmine.createSpy('requestMenuOpen'),
       removeWhenUnrendered: jasmine.createSpy('removeWhenUnrendered'),
       findLiveRowEl: jasmine.createSpy('findLiveRowEl').and.returnValue(null),
+      togglePlannerGroup: jasmine.createSpy('togglePlannerGroup'),
+      beginPlannerGroupDrag: jasmine.createSpy('beginPlannerGroupDrag'),
+      endPlannerGroupDrag: jasmine.createSpy('endPlannerGroupDrag'),
     };
 
     TestBed.configureTestingModule({

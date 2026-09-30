@@ -109,7 +109,9 @@ describe('PlannerDayComponent', () => {
     const DAY = '2026-05-11';
     const task = (id: string, o: Partial<TaskCopy> = {}): TaskCopy =>
       ({ id, subTaskIds: [], ...o }) as TaskCopy;
-    const container = { data: DAY };
+    // Not a `.task-group` list, so drops take the single-task path.
+    const element = { nativeElement: document.createElement('div') };
+    const container = { data: DAY, element };
 
     afterEach(() => TestBed.inject(MockStore).resetSelectors());
 
@@ -173,7 +175,7 @@ describe('PlannerDayComponent', () => {
     it('starts a group for a drop on the new group zone', () => {
       const { component, dispatch } = createForDrop(true, {});
       component.dropInNewGroup(
-        dropEv(task('a'), { previousContainer: { data: DAY } as never }),
+        dropEv(task('a'), { previousContainer: { data: DAY, element } as never }),
       );
 
       expect(dispatch).toHaveBeenCalledTimes(1);
@@ -189,7 +191,7 @@ describe('PlannerDayComponent', () => {
       const { component, dispatch } = createForDrop(true, {});
       component.dropInNewGroup(
         dropEv(task('a'), {
-          previousContainer: { data: DAY } as never,
+          previousContainer: { data: DAY, element } as never,
           isPointerOverContainer: false,
         }),
       );
@@ -214,7 +216,10 @@ describe('PlannerDayComponent', () => {
       component.drop(
         'TODO',
         [task('a'), task('b')],
-        dropEv(grouped, { previousContainer: { data: DAY } as never, currentIndex: 2 }),
+        dropEv(grouped, {
+          previousContainer: { data: DAY, element } as never,
+          currentIndex: 2,
+        }),
       );
 
       expect(dispatch).toHaveBeenCalledOnceWith(
