@@ -1,4 +1,12 @@
-import { GroupDropParams, planGroupDrop } from './plan-group-drop.util';
+import {
+  GroupDropParams,
+  planGroupDrop,
+  planWholeGroupMove,
+} from './plan-group-drop.util';
+import {
+  createPlannerGroupId,
+  partitionTasksByPlannerGroup,
+} from '../store/planner-task-groups.util';
 import { PlannerActions } from '../store/planner.actions';
 import { TaskSharedActions } from '../../../root-store/meta/task-shared.actions';
 import { moveTaskInTodayList } from '../../work-context/store/work-context-meta.actions';
@@ -421,5 +429,127 @@ describe('planGroupDrop()', () => {
         applyToToday(RAW, actions).filter((id) => [...G1, 'd'].includes(id)),
       ).toEqual(['a', 'd', 'c', 'e']);
     });
+  });
+});
+
+describe('planWholeGroupMove', () => {
+  const NOW = 1_800_000_000_000;
+  const OLD_A = createPlannerGroupId(NOW - 2000);
+  const OLD_B = createPlannerGroupId(NOW - 1000);
+  const inGroup = (id: string, day: string, groupId: string): TaskCopy =>
+    task(id, { plannerGroup: `${day}:${groupId}` });
+
+  // Applies the changes and reads the day back the way the planner shows it.
+  const shownLists = (
+    dayTasks: TaskCopy[],
+    changes: { id: string; plannerGroup: string | null }[],
+  ): string[][] => {
+    const byId = new Map(changes.map((c) => [c.id, c.plannerGroup]));
+    const updated = dayTasks.map((t) =>
+      byId.has(t.id) ? { ...t, plannerGroup: byId.get(t.id) } : t,
+    );
+    const { ungroupedTasks, taskGroups } = partitionTasksByPlannerGroup(updated, D2);
+    return [
+      ungroupedTasks.map((t) => t.id),
+      ...taskGroups.map((g) => g.tasks.map((t) => t.id)),
+    ];
+  };
+
+  const target = (): {
+    ungrouped: TaskCopy[];
+    groupA: TaskCopy[];
+    groupB: TaskCopy[];
+  } => ({
+    ungrouped: [task('u1'), task('u2')],
+    groupA: [inGroup('a1', D2, OLD_A)],
+    groupB: [inGroup('b1', D2, OLD_B)],
+  });
+  const moved = [task('m1'), task('m2')];
+
+  const run = (insertAt: number): string[][] => {
+    const { ungrouped, groupA, groupB } = target();
+    const changes = planWholeGroupMove({
+      movedTasks: moved,
+      newDay: D2,
+      ungroupedTasks: ungrouped,
+      taskGroups: [
+        { id: OLD_A, tasks: groupA },
+        { id: OLD_B, tasks: groupB },
+      ],
+      insertAt,
+      now: NOW,
+    });
+    return shownLists([...ungrouped, ...groupA, ...groupB, ...moved], changes);
+  };
+
+  it('placed first, the moved tasks become the framed list and the old one a group', () => {
+    expect(run(0)).toEqual([['m1', 'm2'], ['u1', 'u2'], ['a1'], ['b1']]);
+  });
+
+  it('placed between groups, earlier groups keep their place', () => {
+    expect(run(2)).toEqual([['u1', 'u2'], ['a1'], ['m1', 'm2'], ['b1']]);
+  });
+
+  it('placed last, only the moved tasks change', () => {
+    const { ungrouped, groupA, groupB } = target();
+    const changes = planWholeGroupMove({
+      movedTasks: moved,
+      newDay: D2,
+      ungroupedTasks: ungrouped,
+      taskGroups: [
+        { id: OLD_A, tasks: groupA },
+        { id: OLD_B, tasks: groupB },
+      ],
+      insertAt: 3,
+      now: NOW,
+    });
+    expect(changes.map((c) => c.id)).toEqual(['m1', 'm2']);
+    expect(run(3)).toEqual([['u1', 'u2'], ['a1'], ['b1'], ['m1', 'm2']]);
+  });
+
+  it('moving a group of the same day to the front empties its old place', () => {
+    const groupB = [inGroup('b1', D2, OLD_B), inGroup('b2', D2, OLD_B)];
+    const ungrouped = [task('u1')];
+    const groupA = [inGroup('a1', D2, OLD_A)];
+    const changes = planWholeGroupMove({
+      movedTasks: groupB,
+      newDay: D2,
+      ungroupedTasks: ungrouped,
+      taskGroups: [
+        { id: OLD_A, tasks: groupA },
+        { id: OLD_B, tasks: groupB },
+      ],
+      insertAt: 0,
+      now: NOW,
+    });
+    expect(shownLists([...ungrouped, ...groupA, ...groupB], changes)).toEqual([
+      ['b1', 'b2'],
+      ['u1'],
+      ['a1'],
+    ]);
+  });
+
+  it('a later group stays after the moved one when empty groups are dropped before it', () => {
+    const OLD_C = createPlannerGroupId(NOW - 500);
+    const groupA = [inGroup('a1', D2, OLD_A)];
+    const groupB = [inGroup('b1', D2, OLD_B)];
+    const groupC = [inGroup('c1', D2, OLD_C)];
+    const changes = planWholeGroupMove({
+      movedTasks: [...groupA, ...groupB],
+      newDay: D2,
+      ungroupedTasks: [],
+      taskGroups: [
+        { id: OLD_A, tasks: groupA },
+        { id: OLD_B, tasks: groupB },
+        { id: OLD_C, tasks: groupC },
+      ],
+      insertAt: 3,
+      now: NOW,
+    });
+    expect(shownLists([...groupA, ...groupB, ...groupC], changes)).toEqual([
+      [],
+      ['a1', 'b1'],
+      ['c1'],
+    ]);
   });
 });

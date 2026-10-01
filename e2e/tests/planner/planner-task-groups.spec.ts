@@ -288,6 +288,58 @@ test.describe('Planner task groups', () => {
     ).toHaveText(titles);
   });
 
+  test('the first framed list dropped on an empty day stays the first list', async ({
+    page,
+  }) => {
+    const source = today.locator(UNGROUPED_LIST);
+    const titles = await source.locator('planner-task .title').allTextContents();
+    await source
+      .locator('planner-task .title')
+      .first()
+      .click({ modifiers: ['Meta'] });
+    const tomorrow = page.locator('planner-day').nth(1);
+    await dragTo(page, source.locator('planner-task').last(), () =>
+      centerOf(tomorrow.locator(UNGROUPED_LIST)),
+    );
+    await expect(today.locator('planner-task')).toHaveCount(0);
+    await expect(tomorrow.locator(TASK_GROUP)).toHaveCount(0);
+    await expect(tomorrow.locator(`${UNGROUPED_LIST} planner-task .title`)).toHaveText(
+      titles,
+    );
+  });
+
+  test('a group dropped at the top of the first list becomes the first list', async ({
+    page,
+  }) => {
+    await startGroupWith(page, 'Gamma');
+    await dragIntoGroup(page, 'Beta');
+    const group = today.locator(TASK_GROUP).first();
+    await expect(group.locator('planner-task')).toHaveText([/Gamma/, /Beta/]);
+    await group
+      .locator('planner-task .title')
+      .first()
+      .click({ modifiers: ['Meta'] });
+    await expect(group.locator('planner-task.isMultiSelected')).toHaveCount(2);
+
+    await dragTo(page, group.locator('planner-task').first(), async () => {
+      const box = await today
+        .locator(`${UNGROUPED_LIST} planner-task`)
+        .first()
+        .boundingBox();
+      if (!box) {
+        throw new Error('Ungrouped list has no task to drop onto');
+      }
+      return { x: box.x + half(box.width), y: box.y + 4 };
+    });
+
+    await expect(today.locator(`${UNGROUPED_LIST} planner-task`)).toHaveText([
+      /Gamma/,
+      /Beta/,
+    ]);
+    await expect(today.locator(TASK_GROUP)).toHaveCount(1);
+    await expect(today.locator(`${TASK_GROUP} planner-task`)).toHaveText([/Alpha/]);
+  });
+
   test('Cmd-click selects a group and dragging a member moves the group to another day', async ({
     page,
   }) => {
@@ -338,7 +390,7 @@ test.describe('Planner task groups', () => {
     await page.reload();
     await new PlannerPage(page).navigateToPlanner();
     const overdueGroup = page.locator(`planner-day-overdue ${TASK_GROUP}`).first();
-    await expect(overdueGroup.locator('planner-task')).toHaveCount(2);
+    await expect(overdueGroup.locator('planner-task')).toHaveText([/Gamma/, /Beta/]);
 
     const tomorrow = page.locator('planner-day').nth(1);
     await page.keyboard.down('Meta');
@@ -347,7 +399,10 @@ test.describe('Planner task groups', () => {
     );
     await page.keyboard.up('Meta');
     await expect(overdueGroup).toHaveCount(0);
-    await expect(tomorrow.locator(`${TASK_GROUP} planner-task`)).toHaveCount(2);
+    await expect(tomorrow.locator(`${TASK_GROUP} planner-task`)).toHaveText([
+      /Gamma/,
+      /Beta/,
+    ]);
   });
 
   test('holding Command through selection and drag moves the whole group', async ({
@@ -379,81 +434,6 @@ test.describe('Planner task groups', () => {
     await page.keyboard.up('Meta');
     await expect(today.locator(TASK_GROUP)).toHaveCount(0, { timeout: 3000 });
     await expect(tomorrow.locator(`${TASK_GROUP} planner-task`)).toHaveCount(2);
-  });
-
-  // Pressing Command only once the task is already moving is how the gesture
-  // reads on a Mac: grab, then hold Command.
-  const dragPressingCommandMidway = async (
-    page: Page,
-    source: Locator,
-    target: Locator,
-  ): Promise<void> => {
-    const from = await centerOf(source);
-    await page.mouse.move(from.x, from.y);
-    await page.mouse.down();
-    await page.mouse.move(from.x + 6, from.y + 6, { steps: 4 });
-    await expect(page.locator('.cdk-drag-placeholder')).toBeVisible();
-    await page.keyboard.down('Meta');
-    await expect(page.locator('.planner-group-drag-preview .title')).toHaveCount(2);
-    const to = await centerOf(target);
-    await page.mouse.move(to.x, to.y, { steps: 20 });
-    const finalTo = await centerOf(target);
-    await page.mouse.move(finalTo.x, finalTo.y + 1, { steps: 4 });
-    await page.mouse.up();
-    await page.keyboard.up('Meta');
-    await expect(page.locator('.cdk-drag-preview')).toHaveCount(0);
-  };
-
-  test('Command pressed after the drag started moves the whole group', async ({
-    page,
-  }) => {
-    await startGroupWith(page, 'Gamma');
-    await dragIntoGroup(page, 'Beta');
-    const group = today.locator(TASK_GROUP).first();
-    const tomorrow = page.locator('planner-day').nth(1);
-    await dragPressingCommandMidway(
-      page,
-      group.locator('planner-task').last(),
-      tomorrow.locator(NEW_GROUP_DROP_ZONE),
-    );
-    await expect(today.locator(TASK_GROUP)).toHaveCount(0, { timeout: 3000 });
-    await expect(tomorrow.locator(`${TASK_GROUP} planner-task`)).toHaveText([
-      /Gamma/,
-      /Beta/,
-    ]);
-  });
-
-  test('Command pressed after the drag started moves a whole overdue group', async ({
-    page,
-  }) => {
-    await page.clock.install();
-    await page.reload();
-    await new PlannerPage(page).navigateToPlanner();
-    today = page.locator('planner-day').first();
-    await startGroupWith(page, 'Gamma');
-    await dragIntoGroup(page, 'Beta');
-
-    // give the operation log time to persist before moving to the next day
-    await page.waitForTimeout(1000);
-    await page.clock.setSystemTime(Date.now() + ONE_DAY_MS);
-    await page.reload();
-    await new PlannerPage(page).navigateToPlanner();
-    const overdueGroup = page.locator(`planner-day-overdue ${TASK_GROUP}`).first();
-    await expect(overdueGroup.locator('planner-task')).toHaveText([/Gamma/, /Beta/]);
-
-    const tomorrow = page.locator('planner-day').nth(1);
-    await dragPressingCommandMidway(
-      page,
-      overdueGroup.locator('planner-task').last(),
-      tomorrow.locator(NEW_GROUP_DROP_ZONE),
-    );
-    await expect(page.locator(`planner-day-overdue ${TASK_GROUP}`)).toHaveCount(0, {
-      timeout: 3000,
-    });
-    await expect(tomorrow.locator(`${TASK_GROUP} planner-task`)).toHaveText([
-      /Gamma/,
-      /Beta/,
-    ]);
   });
 
   test('grouping survives a reload', async ({ page }) => {

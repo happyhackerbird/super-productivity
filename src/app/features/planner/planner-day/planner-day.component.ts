@@ -42,11 +42,8 @@ import { safeFormatDate } from '../../../util/safe-format-date';
 import { selectPlannerState } from '../store/planner.selectors';
 import { selectTodayTaskIds } from '../../work-context/store/work-context.selectors';
 import { selectTodayTagTaskIds } from '../../tag/store/tag.reducer';
-import {
-  buildPlannerGroupValue,
-  createPlannerGroupId,
-} from '../store/planner-task-groups.util';
-import { planGroupDrop } from './plan-group-drop.util';
+import { createPlannerGroupId } from '../store/planner-task-groups.util';
+import { planGroupDrop, planWholeGroupMove } from './plan-group-drop.util';
 import { TaskMultiSelectService } from '../../tasks/task-multi-select.service';
 import { SUPER_SYNC_MAX_ENTITY_IDS_PER_OP } from '@sp/shared-schema';
 
@@ -254,44 +251,74 @@ export class PlannerDayComponent {
       return false;
     }
     this._multiSelect.endPlannerGroupDrag();
+    if (ev.previousContainer === ev.container) {
+      return true;
+    }
     const prevDay = ev.previousContainer.data;
     const newDay = ev.container.data;
-    if (prevDay !== newDay) {
-      // Let CDK remove its drag placeholder before the source group disappears.
-      setTimeout(() => this._transferSelectedGroup(sourceTasks, prevDay, newDay), 0);
-    }
+    const groupChanges = planWholeGroupMove({
+      movedTasks: sourceTasks,
+      newDay,
+      ungroupedTasks: this.day.ungroupedTasks ?? this.day.tasks,
+      taskGroups: this.day.taskGroups ?? [],
+      insertAt: this._wholeGroupInsertPosition(ev),
+    });
+    // Let CDK remove its drag placeholder before the source group disappears.
+    setTimeout(
+      () => this._moveSelectedGroup(sourceTasks, prevDay, newDay, groupChanges),
+      0,
+    );
     return true;
   }
 
-  private _transferSelectedGroup(
+  /**
+   * Where a whole group lands among [ungrouped list, ...groups]: dropped at the
+   * top of a list it goes before that list, further down after it, and on the
+   * new group zone or a scheduled slot after the last group.
+   */
+  private _wholeGroupInsertPosition(ev: CdkDragDrop<string, string, TaskCopy>): number {
+    const target = ev.container.element.nativeElement;
+    const offset = ev.currentIndex === 0 ? 0 : 1;
+    if (target.classList.contains('normal-tasks-items')) {
+      return offset;
+    }
+    const groups = this.day.taskGroups ?? [];
+    const groupIndex = groups.findIndex(
+      (group) => group.id === target.dataset['taskGroup'],
+    );
+    return groupIndex === -1 ? groups.length + 1 : groupIndex + 1 + offset;
+  }
+
+  private _moveSelectedGroup(
     tasks: TaskCopy[],
     prevDay: string,
     newDay: string,
+    groupChanges: { id: string; plannerGroup: string | null }[],
   ): void {
     const today = this._dateService.todayStr();
-    const targetIndex =
-      newDay === today
-        ? this._storedTodayTaskIds().length
-        : (this._plannerState().days[newDay] || []).length;
-    const groupValue = buildPlannerGroupValue(newDay, createPlannerGroupId());
-    tasks.forEach((task, index) =>
-      this._store.dispatch(
-        PlannerActions.transferTask({
-          task,
-          prevDay,
-          newDay,
-          targetIndex: targetIndex + index,
-          today,
-        }),
-      ),
-    );
-    for (let i = 0; i < tasks.length; i += SUPER_SYNC_MAX_ENTITY_IDS_PER_OP) {
+    if (prevDay !== newDay) {
+      const targetIndex =
+        newDay === today
+          ? this._storedTodayTaskIds().length
+          : (this._plannerState().days[newDay] || []).length;
+      tasks.forEach((task, index) =>
+        this._store.dispatch(
+          PlannerActions.transferTask({
+            task,
+            prevDay,
+            newDay,
+            targetIndex: targetIndex + index,
+            today,
+          }),
+        ),
+      );
+    }
+    for (let i = 0; i < groupChanges.length; i += SUPER_SYNC_MAX_ENTITY_IDS_PER_OP) {
       this._store.dispatch(
         TaskSharedActions.updateTasks({
-          tasks: tasks.slice(i, i + SUPER_SYNC_MAX_ENTITY_IDS_PER_OP).map((task) => ({
-            id: task.id,
-            changes: { plannerGroup: groupValue },
-          })),
+          tasks: groupChanges
+            .slice(i, i + SUPER_SYNC_MAX_ENTITY_IDS_PER_OP)
+            .map(({ id, plannerGroup }) => ({ id, changes: { plannerGroup } })),
         }),
       );
     }

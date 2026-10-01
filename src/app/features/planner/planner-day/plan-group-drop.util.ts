@@ -5,7 +5,11 @@ import { TaskSharedActions } from '../../../root-store/meta/task-shared.actions'
 import { moveTaskInTodayList } from '../../work-context/store/work-context-meta.actions';
 import { WorkContextType } from '../../work-context/work-context.model';
 import { TODAY_TAG } from '../../tag/tag.const';
-import { buildPlannerGroupValue } from '../store/planner-task-groups.util';
+import {
+  buildPlannerGroupValue,
+  createPlannerGroupId,
+} from '../store/planner-task-groups.util';
+import { PlannerTaskGroup } from '../planner.model';
 
 export interface GroupDropParams {
   task: TaskCopy;
@@ -152,4 +156,65 @@ const isShownAtDropIndex = (
   const members = new Set(listIds).add(taskId);
   const shown = dayTaskIds.filter((id) => members.has(id));
   return shown.length === members.size && shown.indexOf(taskId) === dropIndex;
+};
+
+export interface WholeGroupMoveParams {
+  // the moved tasks, in their order
+  movedTasks: TaskCopy[];
+  newDay: string;
+  // the lists of newDay before the move; they may still contain moved tasks
+  ungroupedTasks: TaskCopy[];
+  taskGroups: PlannerTaskGroup[];
+  // position among [ungrouped list, ...taskGroups]: 0 makes the moved tasks the
+  // ungrouped list, taskGroups.length + 1 puts them after the last group
+  insertAt: number;
+  now?: number;
+}
+
+/**
+ * Plans the group values that place a whole moved group at insertAt on newDay.
+ * Groups sort by id, so the moved group and every list after it get fresh,
+ * increasing ids; lists before it keep theirs. Placed first, the moved tasks
+ * become the ungrouped list and the former ungrouped tasks the first group.
+ */
+export const planWholeGroupMove = ({
+  movedTasks,
+  newDay,
+  ungroupedTasks,
+  taskGroups,
+  insertAt,
+  now = Date.now(),
+}: WholeGroupMoveParams): { id: string; plannerGroup: string | null }[] => {
+  const movedIds = new Set(movedTasks.map((task) => task.id));
+  const keep = (tasks: TaskCopy[]): TaskCopy[] =>
+    tasks.filter((task) => !movedIds.has(task.id));
+  const lists: { id: string | null; tasks: TaskCopy[] }[] = [
+    { id: null, tasks: keep(ungroupedTasks) },
+    ...taskGroups.map((group) => ({ id: group.id, tasks: keep(group.tasks) })),
+  ];
+  const position = Math.min(Math.max(insertAt, 0), lists.length);
+  const moved = { id: null, tasks: movedTasks };
+  lists.splice(position, 0, moved);
+
+  const changes: { id: string; plannerGroup: string | null }[] = [];
+  let freshIdCount = 0;
+  let isAfterMoved = false;
+  lists
+    .filter((list, index) => index === 0 || list.tasks.length > 0)
+    .forEach((list, index) => {
+      isAfterMoved ||= list === moved;
+      const groupId =
+        index === 0
+          ? null
+          : !isAfterMoved && list.id
+            ? list.id
+            : createPlannerGroupId(now + freshIdCount++);
+      const value = groupId ? buildPlannerGroupValue(newDay, groupId) : null;
+      list.tasks.forEach((task) => {
+        if ((task.plannerGroup ?? null) !== value) {
+          changes.push({ id: task.id, plannerGroup: value });
+        }
+      });
+    });
+  return changes;
 };
