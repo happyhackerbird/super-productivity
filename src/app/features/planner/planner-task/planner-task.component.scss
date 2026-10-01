@@ -1,6 +1,26 @@
 @use '../../../../styles/_globals.scss' as *;
 @use '../../tasks/task/task.component.mixins' as *;
 
+.planner-drag-preview {
+  display: flex;
+  color: var(--text-color);
+  background: var(--task-c-bg);
+  border-radius: var(--task-border-radius);
+}
+
+.planner-group-drag-preview {
+  width: 100%;
+  align-self: flex-start;
+  background: var(--task-c-multi-selected-bg);
+  border: var(--task-border);
+  border-radius: var(--task-border-radius);
+  box-shadow: var(--whiteframe-shadow-8dp);
+
+  .title {
+    padding: var(--s-half);
+  }
+}
+
 :host {
   border-radius: var(--task-border-radius);
   min-height: var(--planner-item-height);

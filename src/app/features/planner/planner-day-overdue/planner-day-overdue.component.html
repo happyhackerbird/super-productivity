@@ -48,6 +48,7 @@
       @for (task of group.tasks; track task.id) {
         <planner-task
           #groupTask
+          [plannerGroupTasks]="group.tasks"
           cdkDrag
           (cdkDragStarted)="groupTask.onPlannerGroupDragStarted()"
           (cdkDragEnded)="groupTask.onPlannerGroupDragEnded()"

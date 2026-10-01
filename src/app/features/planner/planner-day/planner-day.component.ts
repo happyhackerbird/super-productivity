@@ -232,7 +232,9 @@ export class PlannerDayComponent {
   }
 
   private _dropSelectedGroupOnDay(ev: CdkDragDrop<string, string, TaskCopy>): boolean {
-    if (!ev.previousContainer.element.nativeElement.classList.contains('task-group')) {
+    const source = ev.previousContainer.element.nativeElement;
+    const isFirstGroup = source.classList.contains('normal-tasks-items--framed');
+    if (!source.classList.contains('task-group') && !isFirstGroup) {
       return false;
     }
     const sourceTasks = ev.previousContainer
@@ -246,7 +248,7 @@ export class PlannerDayComponent {
       !sourceTasks.every(
         (task) =>
           (modifierDrag || selected.has(task.id)) &&
-          task.plannerGroup === ev.item.data.plannerGroup,
+          (isFirstGroup || task.plannerGroup === ev.item.data.plannerGroup),
       )
     ) {
       return false;

@@ -65,6 +65,8 @@ import { WorkContextType } from '../../work-context/work-context.model';
 import { TODAY_TAG } from '../../tag/tag.const';
 import { ADD_TASK_INLINE_BTN_SELECTOR } from '../add-task-inline/add-task-inline.const';
 import { getNextPlannerAddButton } from '../get-next-planner-add-button';
+import { CdkDragPreview } from '@angular/cdk/drag-drop';
+import { NgTemplateOutlet } from '@angular/common';
 
 @Component({
   selector: 'planner-task',
@@ -73,6 +75,8 @@ import { getNextPlannerAddButton } from '../get-next-planner-add-button';
   changeDetection: ChangeDetectionStrategy.OnPush,
   standalone: true,
   imports: [
+    CdkDragPreview,
+    NgTemplateOutlet,
     MatIcon,
     TagListComponent,
     InlineInputComponent,
@@ -118,6 +122,18 @@ export class PlannerTaskComponent implements OnInit, OnDestroy, AfterViewInit {
   };
 
   readonly task = input.required<TaskCopy>();
+  // The first framed list is a group too, even without persisted group ids.
+  readonly plannerGroupTasks = input<readonly TaskCopy[]>([]);
+  private readonly _isModifierGroupDrag = signal(false);
+  readonly isWholeGroupDrag = computed(() => {
+    const tasks = this.plannerGroupTasks();
+    const selected = this._multiSelect.selectedIds();
+    return (
+      tasks.length > 0 &&
+      (this._isModifierGroupDrag() ||
+        (selected.size === tasks.length && tasks.every((task) => selected.has(task.id))))
+    );
+  });
 
   readonly titleHasLinks = computed<boolean>(() => {
     const title = this.task().title;
@@ -290,6 +306,7 @@ export class PlannerTaskComponent implements OnInit, OnDestroy, AfterViewInit {
           !(event.target instanceof HTMLElement && isInputElement(event.target)) &&
           !isLinkTarget(event.target) &&
           this._plannerGroupIds(host).length > 0;
+        this._isModifierGroupDrag.set(this._modifierDragPointerDown);
       };
       const selectFromModifierClick = (event: MouseEvent): void => {
         const target = event.target;
@@ -363,10 +380,11 @@ export class PlannerTaskComponent implements OnInit, OnDestroy, AfterViewInit {
     // Command pressed only after the drag began still means "move the group".
     // CDK has moved the host out of its group by now, so the DOM can't answer
     // group membership; the drop handler re-checks the source list.
-    if (!this.task().plannerGroup) return;
+    if (!this.plannerGroupTasks().length) return;
     const latch = (event: KeyboardEvent | MouseEvent): void => {
-      if (event.metaKey || event.ctrlKey) {
+      if ((event.metaKey || event.ctrlKey) && !this._isModifierGroupDrag()) {
         this._multiSelect.beginPlannerGroupDrag(taskId);
+        this._ngZone.run(() => this._isModifierGroupDrag.set(true));
       }
     };
     this._ngZone.runOutsideAngular(() => {
@@ -382,11 +400,15 @@ export class PlannerTaskComponent implements OnInit, OnDestroy, AfterViewInit {
   }
 
   onPlannerGroupDragEnded(): void {
+    this._isModifierGroupDrag.set(false);
     this._groupDragModifierCleanup?.();
     this._groupDragModifierCleanup = undefined;
   }
 
   private _plannerGroupIds(host: HTMLElement): string[] {
+    if (this.plannerGroupTasks().length) {
+      return this.plannerGroupTasks().map((task) => task.id);
+    }
     const group = host.closest<HTMLElement>(
       'planner-day .task-group, planner-day-overdue .task-group',
     );

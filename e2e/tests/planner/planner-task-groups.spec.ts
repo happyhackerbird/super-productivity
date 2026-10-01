@@ -261,6 +261,33 @@ test.describe('Planner task groups', () => {
     }
   });
 
+  test('Cmd-click on the first framed list selects and moves the whole group', async ({
+    page,
+  }) => {
+    const source = today.locator(UNGROUPED_LIST);
+    const titles = await source.locator('planner-task .title').allTextContents();
+    await source
+      .locator('planner-task .title')
+      .first()
+      .click({ modifiers: ['Meta'] });
+    await expect(source.locator('planner-task.isMultiSelected')).toHaveCount(3);
+    const tomorrow = page.locator('planner-day').nth(1);
+    await dragTo(page, source.locator('planner-task').last(), async () => {
+      await expect(page.locator('.planner-group-drag-preview .title')).toHaveText(titles);
+      return centerOf(tomorrow.locator(NEW_GROUP_DROP_ZONE));
+    });
+    await expect(today.locator('planner-task')).toHaveCount(0);
+    await expect(tomorrow.locator(TASK_GROUP)).toHaveCount(1);
+    await expect(tomorrow.locator(`${TASK_GROUP} planner-task .title`)).toHaveText(
+      titles,
+    );
+    await page.reload();
+    await new PlannerPage(page).navigateToPlanner();
+    await expect(
+      page.locator('planner-day').nth(1).locator(`${TASK_GROUP} planner-task .title`),
+    ).toHaveText(titles);
+  });
+
   test('Cmd-click selects a group and dragging a member moves the group to another day', async ({
     page,
   }) => {
@@ -367,6 +394,7 @@ test.describe('Planner task groups', () => {
     await page.mouse.move(from.x + 6, from.y + 6, { steps: 4 });
     await expect(page.locator('.cdk-drag-placeholder')).toBeVisible();
     await page.keyboard.down('Meta');
+    await expect(page.locator('.planner-group-drag-preview .title')).toHaveCount(2);
     const to = await centerOf(target);
     await page.mouse.move(to.x, to.y, { steps: 20 });
     const finalTo = await centerOf(target);

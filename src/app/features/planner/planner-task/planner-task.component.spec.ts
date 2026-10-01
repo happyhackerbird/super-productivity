@@ -1,4 +1,5 @@
 import { ComponentFixture, fakeAsync, TestBed, tick } from '@angular/core/testing';
+import { NgTemplateOutlet } from '@angular/common';
 import { NO_ERRORS_SCHEMA, signal, WritableSignal } from '@angular/core';
 import { TranslateModule } from '@ngx-translate/core';
 import { of, Subject } from 'rxjs';
@@ -151,7 +152,13 @@ describe('PlannerTaskComponent', () => {
         // `done-toggle` stays REAL: the planner's modifier-click behaviour is a
         // property of how this template configures that shared component, so
         // stubbing it would test nothing (see the spec at the bottom).
-        imports: [DoneToggleComponent, MsToStringPipe, RenderLinksPipe, TranslatePipe],
+        imports: [
+          NgTemplateOutlet,
+          DoneToggleComponent,
+          MsToStringPipe,
+          RenderLinksPipe,
+          TranslatePipe,
+        ],
         schemas: [NO_ERRORS_SCHEMA],
       },
     });
