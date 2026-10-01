@@ -1,4 +1,5 @@
 import { ComponentFixture, fakeAsync, TestBed, tick } from '@angular/core/testing';
+import { NgTemplateOutlet } from '@angular/common';
 import { NO_ERRORS_SCHEMA, signal, WritableSignal } from '@angular/core';
 import { TranslateModule } from '@ngx-translate/core';
 import { of, Subject } from 'rxjs';
@@ -53,6 +54,9 @@ describe('PlannerTaskComponent', () => {
     requestMenuOpen: jasmine.Spy;
     removeWhenUnrendered: jasmine.Spy;
     findLiveRowEl: jasmine.Spy;
+    togglePlannerGroup: jasmine.Spy;
+    beginPlannerGroupDrag: jasmine.Spy;
+    endPlannerGroupDrag: jasmine.Spy;
   };
 
   const create = (
@@ -102,6 +106,9 @@ describe('PlannerTaskComponent', () => {
       requestMenuOpen: jasmine.createSpy('requestMenuOpen'),
       removeWhenUnrendered: jasmine.createSpy('removeWhenUnrendered'),
       findLiveRowEl: jasmine.createSpy('findLiveRowEl').and.returnValue(null),
+      togglePlannerGroup: jasmine.createSpy('togglePlannerGroup'),
+      beginPlannerGroupDrag: jasmine.createSpy('beginPlannerGroupDrag'),
+      endPlannerGroupDrag: jasmine.createSpy('endPlannerGroupDrag'),
     };
 
     TestBed.configureTestingModule({
@@ -145,7 +152,13 @@ describe('PlannerTaskComponent', () => {
         // `done-toggle` stays REAL: the planner's modifier-click behaviour is a
         // property of how this template configures that shared component, so
         // stubbing it would test nothing (see the spec at the bottom).
-        imports: [DoneToggleComponent, MsToStringPipe, RenderLinksPipe, TranslatePipe],
+        imports: [
+          NgTemplateOutlet,
+          DoneToggleComponent,
+          MsToStringPipe,
+          RenderLinksPipe,
+          TranslatePipe,
+        ],
         schemas: [NO_ERRORS_SCHEMA],
       },
     });
@@ -755,6 +768,58 @@ describe('PlannerTaskComponent', () => {
         scope.remove();
       });
     }
+
+    it('only reorders within the own list for a day with task groups', () => {
+      const scope = document.createElement('planner-day');
+      scope.setAttribute('data-planner-selection-scope', '2026-09-12');
+      const normal = document.createElement('div');
+      normal.className = 'normal-tasks';
+      scope.appendChild(normal);
+      const addRow = (parent: HTMLElement, id: string): HTMLElement => {
+        const row = document.createElement('planner-task');
+        row.setAttribute('data-task-id', id);
+        row.setAttribute('data-task-selectable', 'true');
+        parent.appendChild(row);
+        return row;
+      };
+      const ungrouped = document.createElement('div');
+      ungrouped.className = 'normal-tasks-items';
+      normal.appendChild(ungrouped);
+      addRow(ungrouped, 'ungrouped');
+      const group = document.createElement('div');
+      group.className = 'task-group';
+      normal.appendChild(group);
+      const host = addRow(group, 't1');
+      addRow(group, 'groupLast');
+      document.body.appendChild(scope);
+      const { component } = create(makeTask(), true, '2026-09-12');
+      (
+        component as unknown as { _elementRef: { nativeElement: HTMLElement } }
+      )._elementRef.nativeElement = host;
+
+      (
+        component as unknown as {
+          _reorderAllDay: (direction: 'up' | 'down' | 'top' | 'bottom') => void;
+        }
+      )._reorderAllDay('down');
+
+      expect(storeMock.dispatch).toHaveBeenCalledWith(
+        moveTaskDownInTodayList({
+          taskId: 't1',
+          workContextType: WorkContextType.TAG,
+          workContextId: TODAY_TAG.id,
+          doneTaskIds: ['t1', 'groupLast'],
+        }),
+      );
+      storeMock.dispatch.calls.reset();
+      (
+        component as unknown as {
+          _reorderAllDay: (direction: 'up' | 'down' | 'top' | 'bottom') => void;
+        }
+      )._reorderAllDay('up');
+      expect(storeMock.dispatch).not.toHaveBeenCalled();
+      scope.remove();
+    });
   });
 
   it('intercepts a modifier click before an embedded control activates', () => {

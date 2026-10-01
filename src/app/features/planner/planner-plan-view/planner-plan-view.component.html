@@ -8,7 +8,10 @@
     ></planner-day-overdue>
   }
   @for (day of days$ | async; track day.dayDate) {
-    <planner-day [day]="day"></planner-day>
+    <planner-day
+      [day]="day"
+      [isTaskGroupingEnabled]="true"
+    ></planner-day>
   }
   @if (isLoadingMore$ | async) {
     <div class="loading-more">

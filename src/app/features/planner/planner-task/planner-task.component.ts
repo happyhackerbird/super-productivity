@@ -50,6 +50,7 @@ import { millisecondsDiffToRemindOption } from '../../tasks/util/remind-option-t
 import { PlannerActions } from '../store/planner.actions';
 import { DialogConfirmComponent } from '../../../ui/dialog-confirm/dialog-confirm.component';
 import { first } from 'rxjs/operators';
+import { selectPlannerState } from '../store/planner.selectors';
 import { isInputElement, isLinkTarget } from '../../../util/dom-element';
 import { isMultiSelectModifierEvent } from '../../../util/is-multi-select-modifier-event';
 import { parseDbDateStr } from '../../../util/parse-db-date-str';
@@ -63,6 +64,8 @@ import { WorkContextType } from '../../work-context/work-context.model';
 import { TODAY_TAG } from '../../tag/tag.const';
 import { ADD_TASK_INLINE_BTN_SELECTOR } from '../add-task-inline/add-task-inline.const';
 import { getNextPlannerAddButton } from '../get-next-planner-add-button';
+import { CdkDragPreview } from '@angular/cdk/drag-drop';
+import { NgTemplateOutlet } from '@angular/common';
 
 @Component({
   selector: 'planner-task',
@@ -71,6 +74,8 @@ import { getNextPlannerAddButton } from '../get-next-planner-add-button';
   changeDetection: ChangeDetectionStrategy.OnPush,
   standalone: true,
   imports: [
+    CdkDragPreview,
+    NgTemplateOutlet,
     MatIcon,
     TagListComponent,
     InlineInputComponent,
@@ -115,6 +120,18 @@ export class PlannerTaskComponent implements OnInit, OnDestroy, AfterViewInit {
   };
 
   readonly task = input.required<TaskCopy>();
+  // The first framed list is a group too, even without persisted group ids.
+  readonly plannerGroupTasks = input<readonly TaskCopy[]>([]);
+  private readonly _isModifierGroupDrag = signal(false);
+  readonly isWholeGroupDrag = computed(() => {
+    const tasks = this.plannerGroupTasks();
+    const selected = this._multiSelect.selectedIds();
+    return (
+      tasks.length > 0 &&
+      (this._isModifierGroupDrag() ||
+        (selected.size === tasks.length && tasks.every((task) => selected.has(task.id))))
+    );
+  });
 
   readonly titleHasLinks = computed<boolean>(() => {
     const title = this.task().title;
@@ -143,6 +160,7 @@ export class PlannerTaskComponent implements OnInit, OnDestroy, AfterViewInit {
   private _doneAnimationTimeout?: number;
   private _dragReadyTimeout?: number;
   private _touchListenerCleanups: (() => void)[] = [];
+  private _modifierDragPointerDown = false;
 
   readonly taskContextMenu = viewChild('taskContextMenu', {
     read: TaskContextMenuComponent,
@@ -277,6 +295,16 @@ export class PlannerTaskComponent implements OnInit, OnDestroy, AfterViewInit {
     }
     if (this.focusable()) {
       const host = this._elementRef.nativeElement as HTMLElement;
+      const rememberModifierDrag = (event: MouseEvent): void => {
+        this._multiSelect.endPlannerGroupDrag();
+        this._modifierDragPointerDown =
+          event.button === 0 &&
+          (event.metaKey || event.ctrlKey) &&
+          !(event.target instanceof HTMLElement && isInputElement(event.target)) &&
+          !isLinkTarget(event.target) &&
+          this._plannerGroupIds(host).length > 0;
+        this._isModifierGroupDrag.set(this._modifierDragPointerDown);
+      };
       const selectFromModifierClick = (event: MouseEvent): void => {
         const target = event.target;
         // Touch selection mode deliberately swallows links too: the whole row
@@ -312,7 +340,12 @@ export class PlannerTaskComponent implements OnInit, OnDestroy, AfterViewInit {
           host.focus();
         } else {
           host.focus();
-          this._multiSelect.toggle(this.task().id);
+          const ids = this._plannerGroupIds(host);
+          if (ids.length) {
+            this._multiSelect.togglePlannerGroup(ids, this.task().id, host);
+          } else {
+            this._multiSelect.toggle(this.task().id);
+          }
         }
       };
       const preventShiftSelection = (event: MouseEvent): void => {
@@ -323,13 +356,40 @@ export class PlannerTaskComponent implements OnInit, OnDestroy, AfterViewInit {
           event.preventDefault();
         }
       };
+      host.addEventListener('mousedown', rememberModifierDrag, true);
       host.addEventListener('click', selectFromModifierClick, true);
       host.addEventListener('mousedown', preventShiftSelection, true);
       this._touchListenerCleanups.push(
+        () => host.removeEventListener('mousedown', rememberModifierDrag, true),
         () => host.removeEventListener('click', selectFromModifierClick, true),
         () => host.removeEventListener('mousedown', preventShiftSelection, true),
       );
     }
+  }
+
+  onPlannerGroupDragStarted(): void {
+    if (!this._modifierDragPointerDown) return;
+    this._modifierDragPointerDown = false;
+    this._multiSelect.beginPlannerGroupDrag(this.task().id);
+  }
+
+  onPlannerGroupDragEnded(): void {
+    this._isModifierGroupDrag.set(false);
+  }
+
+  private _plannerGroupIds(host: HTMLElement): string[] {
+    if (this.plannerGroupTasks().length) {
+      return this.plannerGroupTasks().map((task) => task.id);
+    }
+    const group = host.closest<HTMLElement>(
+      'planner-day .task-group, planner-day-overdue .task-group',
+    );
+    if (!group) return [];
+    return Array.from(
+      group.querySelectorAll<HTMLElement>('planner-task[data-task-selectable="true"]'),
+    )
+      .map((row) => row.dataset.taskId)
+      .filter((id): id is string => !!id);
   }
 
   ngOnDestroy(): void {
@@ -343,6 +403,7 @@ export class PlannerTaskComponent implements OnInit, OnDestroy, AfterViewInit {
     window.clearTimeout(this._doneAnimationTimeout);
     window.clearTimeout(this._dragReadyTimeout);
     this._touchListenerCleanups.forEach((fn) => fn());
+    this.onPlannerGroupDragEnded();
     if (
       this._completionFocusFallback &&
       document.activeElement === this._elementRef.nativeElement
@@ -623,13 +684,23 @@ export class PlannerTaskComponent implements OnInit, OnDestroy, AfterViewInit {
       return;
     }
     const scope = host.closest<HTMLElement>('[data-planner-selection-scope]');
-    const rows = scope
+    // with task groups a task is only moved within its own list
+    const groupedList = scope?.querySelector('.task-group')
+      ? host.closest<HTMLElement>('.normal-tasks-items, .task-group')
+      : null;
+    const rows = groupedList
       ? Array.from(
-          scope.querySelectorAll<HTMLElement>(
-            '.normal-tasks planner-task[data-task-selectable="true"]',
+          groupedList.querySelectorAll<HTMLElement>(
+            'planner-task[data-task-selectable="true"]',
           ),
         )
-      : [];
+      : scope
+        ? Array.from(
+            scope.querySelectorAll<HTMLElement>(
+              '.normal-tasks planner-task[data-task-selectable="true"]',
+            ),
+          )
+        : [];
     const fromIndex = rows.indexOf(host);
     const toIndex =
       direction === 'up'
@@ -663,6 +734,26 @@ export class PlannerTaskComponent implements OnInit, OnDestroy, AfterViewInit {
               ? moveTaskToTopInTodayList(props)
               : moveTaskToBottomInTodayList(props);
       this._store.dispatch(action);
+    } else if (groupedList) {
+      // the rows are only a part of the day, so look up their position in it
+      const targetTaskId = rows[toIndex].getAttribute('data-task-id') as string;
+      this._store
+        .select(selectPlannerState)
+        .pipe(first())
+        .subscribe((plannerState) => {
+          const dayTaskIds = plannerState.days[day] || [];
+          const rawFromIndex = dayTaskIds.indexOf(this.task().id);
+          const rawToIndex = dayTaskIds.indexOf(targetTaskId);
+          if (rawFromIndex !== -1 && rawToIndex !== -1) {
+            this._store.dispatch(
+              PlannerActions.moveInList({
+                targetDay: day,
+                fromIndex: rawFromIndex,
+                toIndex: rawToIndex,
+              }),
+            );
+          }
+        });
     } else {
       this._store.dispatch(
         PlannerActions.moveInList({ targetDay: day, fromIndex, toIndex }),

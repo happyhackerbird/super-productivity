@@ -92,7 +92,8 @@
   flex-grow: 1;
 }
 
-.normal-tasks-items > * {
+.normal-tasks-items > *,
+.task-group > * {
   margin-bottom: var(--s);
 }
 
@@ -164,4 +165,8 @@
   font-style: italic;
   line-height: var(--planner-item-height);
   height: 0;
+}
+
+.task-group {
+  margin-top: var(--s2);
 }

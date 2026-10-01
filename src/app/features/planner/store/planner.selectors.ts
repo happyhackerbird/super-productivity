@@ -34,6 +34,7 @@ import {
   selectTodayStr,
 } from '../../../root-store/app-state/app-state.selectors';
 import { isTodayWithOffset } from '../../../util/is-today.util';
+import { partitionTasksByPlannerGroup } from './planner-task-groups.util';
 import { getTaskRepeatCfgsForExactDayCached } from '../../task-repeat-cfg/store/get-task-repeat-cfgs-for-exact-day-cached.util';
 
 export const selectPlannerState = createFeatureSelector<fromPlanner.PlannerState>(
@@ -264,6 +265,7 @@ const getPlannerDay = (
       ...scheduledTaskItems,
     ].sort((a, b) => a.start - b.start),
     tasks: normalTasks,
+    ...partitionTasksByPlannerGroup(normalTasks, dayDate),
     deadlineTasks,
     noStartTimeRepeatProjections,
     allDayEvents,

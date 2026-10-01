@@ -549,6 +549,7 @@ export class ProjectService {
         created,
         timeSpent,
         timeSpentOnDay,
+        plannerGroup,
         ...taskDataToCopy
       } = p;
       /* eslint-enable @typescript-eslint/no-unused-vars */
@@ -589,6 +590,7 @@ export class ProjectService {
             created: _created,
             timeSpent: _timeSpent,
             timeSpentOnDay: _timeSpentOnDay,
+            plannerGroup: _plannerGroup,
             ...subTaskDataToCopy
           } = st;
           /* eslint-enable @typescript-eslint/no-unused-vars */

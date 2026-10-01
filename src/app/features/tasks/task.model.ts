@@ -103,6 +103,15 @@ export interface TaskCopy
   priority?: TaskPriority | null;
 
   /**
+   * Planner plan view group of the task: `<YYYY-MM-DD>:<groupId>`. Only applies
+   * while the task is shown in the task list of exactly that day; any other
+   * value (or none) means ungrouped. Groups are not stored anywhere else.
+   * Persisted as an optional field (no schema bump); older clients carry it as
+   * an unknown field.
+   */
+  plannerGroup?: string | null;
+
+  /**
    * Scheduled time as Unix timestamp (ms). For tasks scheduled with a specific time.
    *
    * IMPORTANT: dueWithTime and dueDay follow a mutual exclusivity pattern:

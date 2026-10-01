@@ -2,8 +2,10 @@ import {
   ChangeDetectionStrategy,
   Component,
   computed,
+  ElementRef,
   HostBinding,
   inject,
+  input,
   Input,
 } from '@angular/core';
 import { T } from '../../../t.const';
@@ -37,6 +39,13 @@ import { LayoutService } from '../../../core-ui/layout/layout.service';
 import { DateTimeFormatService } from '../../../core/date-time-format/date-time-format.service';
 import { parseDbDateStr } from '../../../util/parse-db-date-str';
 import { safeFormatDate } from '../../../util/safe-format-date';
+import { selectPlannerState } from '../store/planner.selectors';
+import { selectTodayTaskIds } from '../../work-context/store/work-context.selectors';
+import { selectTodayTagTaskIds } from '../../tag/store/tag.reducer';
+import { createPlannerGroupId } from '../store/planner-task-groups.util';
+import { planGroupDrop, planWholeGroupMove } from './plan-group-drop.util';
+import { TaskMultiSelectService } from '../../tasks/task-multi-select.service';
+import { SUPER_SYNC_MAX_ENTITY_IDS_PER_OP } from '@sp/shared-schema';
 
 @Component({
   selector: 'planner-day',
@@ -68,11 +77,17 @@ export class PlannerDayComponent {
   private _dateService = inject(DateService);
   private _layoutService = inject(LayoutService);
   private _dateTimeFormatService = inject(DateTimeFormatService);
+  private _hostElement = inject(ElementRef<HTMLElement>);
+  private _multiSelect = inject(TaskMultiSelectService);
 
   // TODO: Skipped for migration because:
   //  This input is used in a control flow expression (e.g. `@if` or `*ngIf`)
   //  and migrating would break narrowing currently.
   @Input() day!: PlannerDay;
+
+  // Task groups are a plan view feature. Without this the day looks and behaves
+  // the same as before, e.g. for the daily summary.
+  readonly isTaskGroupingEnabled = input(false);
 
   @HostBinding('attr.data-day') get dataDayAttr(): string | undefined {
     return this.day?.dayDate;
@@ -89,6 +104,17 @@ export class PlannerDayComponent {
   // Lock Y-axis on small screens only — on wider screens the planner uses a
   // multi-column grid where cross-column dragging requires horizontal movement.
   protected readonly isXs = this._layoutService.isXs;
+
+  private readonly _plannerState = this._store.selectSignal(selectPlannerState);
+  private readonly _todayTaskIds = this._store.selectSignal(selectTodayTaskIds);
+  private readonly _storedTodayTaskIds = this._store.selectSignal(selectTodayTagTaskIds);
+
+  // Untimed tasks can only be dropped between scheduled items, not into the
+  // empty list: the area below the tasks starts a new group instead.
+  protected readonly canEnterScheduled = (drag: CdkDrag<TaskCopy>): boolean =>
+    !this.isTaskGroupingEnabled() ||
+    !!drag.data?.dueWithTime ||
+    this.day.scheduledIItems.length > 0;
 
   // Precompute the weekday ('EEE') header label, keyed on the current locale.
   // Replaces a per-CD `| localeDate: 'EEE'` pipe. The parent tracks planner-day
@@ -128,12 +154,23 @@ export class PlannerDayComponent {
     const newDay = ev.container.data;
     const task = ev.item.data;
 
+    if (this._dropSelectedGroupOnDay(ev)) {
+      return;
+    }
+
     if (targetList === 'SCHEDULED') {
       if (ev.previousContainer !== ev.container) {
         this.editTaskReminderOrReScheduleIfPossible(task, ev.container.data);
       }
       return;
     } else if (targetList === 'TODO') {
+      if (
+        this.isTaskGroupingEnabled() &&
+        (!!this.day.taskGroups?.length || !!task.plannerGroup)
+      ) {
+        this._dropInTaskList(null, allItems as TaskCopy[], ev);
+        return;
+      }
       if (ev.previousContainer === ev.container) {
         if (this.day.isToday) {
           this._store.dispatch(
@@ -164,6 +201,168 @@ export class PlannerDayComponent {
         );
       }
     }
+  }
+
+  dropInGroup(
+    groupId: string,
+    groupTasks: TaskCopy[],
+    ev: CdkDragDrop<string, string, TaskCopy>,
+  ): void {
+    if (this._dropSelectedGroupOnDay(ev)) {
+      return;
+    }
+    this._dropInTaskList(groupId, groupTasks, ev);
+  }
+
+  dropInNewGroup(ev: CdkDragDrop<string, string, TaskCopy>): void {
+    // CDK keeps the last entered list as the drop target after the pointer
+    // leaves it. Its overlap flag can also be stale after the placeholder moves
+    // the zone. Use the release point to accept the zone itself and, on a day
+    // without scheduled items, the blank column space below it.
+    if (!ev.isPointerOverContainer && !this._isInNewGroupDropArea(ev)) {
+      return;
+    }
+    if (this._dropSelectedGroupOnDay(ev)) {
+      return;
+    }
+    this._dropInTaskList(createPlannerGroupId(), [], ev);
+  }
+
+  private _dropSelectedGroupOnDay(ev: CdkDragDrop<string, string, TaskCopy>): boolean {
+    const source = ev.previousContainer.element.nativeElement;
+    const isFirstGroup = source.classList.contains('normal-tasks-items--framed');
+    if (!source.classList.contains('task-group') && !isFirstGroup) {
+      return false;
+    }
+    const sourceTasks = ev.previousContainer
+      .getSortedItems()
+      .map((item) => item.data as TaskCopy);
+    const selected = this._multiSelect.selectedIds();
+    const modifierDrag = this._multiSelect.isPlannerGroupDrag(ev.item.data.id);
+    if (
+      !sourceTasks.length ||
+      (!modifierDrag && selected.size !== sourceTasks.length) ||
+      !sourceTasks.every(
+        (task) =>
+          (modifierDrag || selected.has(task.id)) &&
+          (isFirstGroup || task.plannerGroup === ev.item.data.plannerGroup),
+      )
+    ) {
+      return false;
+    }
+    this._multiSelect.endPlannerGroupDrag();
+    if (ev.previousContainer === ev.container) {
+      return true;
+    }
+    const prevDay = ev.previousContainer.data;
+    const newDay = ev.container.data;
+    const groupChanges = planWholeGroupMove({
+      movedTasks: sourceTasks,
+      newDay,
+      ungroupedTasks: this.day.ungroupedTasks ?? this.day.tasks,
+      taskGroups: this.day.taskGroups ?? [],
+      insertAt: this._wholeGroupInsertPosition(ev),
+    });
+    // Let CDK remove its drag placeholder before the source group disappears.
+    setTimeout(
+      () => this._moveSelectedGroup(sourceTasks, prevDay, newDay, groupChanges),
+      0,
+    );
+    return true;
+  }
+
+  /**
+   * Where a whole group lands among [ungrouped list, ...groups]: dropped at the
+   * top of a list it goes before that list, further down after it, and on the
+   * new group zone or a scheduled slot after the last group.
+   */
+  private _wholeGroupInsertPosition(ev: CdkDragDrop<string, string, TaskCopy>): number {
+    const target = ev.container.element.nativeElement;
+    const offset = ev.currentIndex === 0 ? 0 : 1;
+    if (target.classList.contains('normal-tasks-items')) {
+      return offset;
+    }
+    const groups = this.day.taskGroups ?? [];
+    const groupIndex = groups.findIndex(
+      (group) => group.id === target.dataset['taskGroup'],
+    );
+    return groupIndex === -1 ? groups.length + 1 : groupIndex + 1 + offset;
+  }
+
+  private _moveSelectedGroup(
+    tasks: TaskCopy[],
+    prevDay: string,
+    newDay: string,
+    groupChanges: { id: string; plannerGroup: string | null }[],
+  ): void {
+    const today = this._dateService.todayStr();
+    if (prevDay !== newDay) {
+      const targetIndex =
+        newDay === today
+          ? this._storedTodayTaskIds().length
+          : (this._plannerState().days[newDay] || []).length;
+      tasks.forEach((task, index) =>
+        this._store.dispatch(
+          PlannerActions.transferTask({
+            task,
+            prevDay,
+            newDay,
+            targetIndex: targetIndex + index,
+            today,
+          }),
+        ),
+      );
+    }
+    for (let i = 0; i < groupChanges.length; i += SUPER_SYNC_MAX_ENTITY_IDS_PER_OP) {
+      this._store.dispatch(
+        TaskSharedActions.updateTasks({
+          tasks: groupChanges
+            .slice(i, i + SUPER_SYNC_MAX_ENTITY_IDS_PER_OP)
+            .map(({ id, plannerGroup }) => ({ id, changes: { plannerGroup } })),
+        }),
+      );
+    }
+    this._multiSelect.clear();
+  }
+
+  private _isInNewGroupDropArea(ev: CdkDragDrop<string, string, TaskCopy>): boolean {
+    if (!ev.dropPoint) {
+      return false;
+    }
+    const zone = ev.container.element.nativeElement.getBoundingClientRect();
+    const { x, y } = ev.dropPoint;
+    if (x < zone.left || x > zone.right || y < zone.top) {
+      return false;
+    }
+    return (
+      y <= zone.bottom ||
+      (this.day.scheduledIItems.length === 0 &&
+        y <= this._hostElement.nativeElement.getBoundingClientRect().bottom)
+    );
+  }
+
+  private _dropInTaskList(
+    targetGroupId: string | null,
+    targetTasks: TaskCopy[],
+    ev: CdkDragDrop<string, string, TaskCopy>,
+  ): void {
+    if (ev.previousContainer === ev.container && ev.previousIndex === ev.currentIndex) {
+      return;
+    }
+    const newDay = ev.container.data;
+    const today = this._dateService.todayStr();
+    planGroupDrop({
+      task: ev.item.data,
+      prevDay: ev.previousContainer.data,
+      newDay,
+      today,
+      targetGroupId,
+      targetTaskIds: targetTasks.map((t) => t.id),
+      dropIndex: ev.currentIndex,
+      dayTaskIds:
+        newDay === today ? this._todayTaskIds() : this._plannerState().days[newDay] || [],
+      storedTodayTaskIds: this._storedTodayTaskIds(),
+    }).forEach((action) => this._store.dispatch(action));
   }
 
   editTaskReminderOrReScheduleIfPossible(task: TaskCopy, newDay?: string): void {

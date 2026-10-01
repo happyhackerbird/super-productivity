@@ -139,6 +139,35 @@
   flex-grow: 1;
 }
 
+// Groups sit below the list with a gap.
+.task-group,
+.new-task-group-drop-zone {
+  min-height: var(--planner-item-height);
+  margin-top: var(--s2);
+}
+
+// The first group follows the Add row. Give later groups the same space
+// between task blocks so every group boundary reads alike.
+.task-group + .task-group {
+  margin-top: calc(var(--s2) + var(--s4) + var(--s-half));
+}
+
+// The regular task list is the first group in Plan view.
+.normal-tasks-items--framed {
+  --planner-group-c: #8b5cf6;
+  padding: var(--s-half) var(--s-half) 0;
+  border: 1px solid color-mix(in srgb, var(--planner-group-c) 45%, transparent);
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--planner-group-c) 7%, transparent);
+  box-shadow: inset 3px 0 0 var(--planner-group-c);
+}
+
+// Keeps its size at all times so the drop area does not move when a drag
+// starts. It is only visible while dragging, via the global drop list outline.
+.new-task-group-drop-zone {
+  flex-shrink: 0;
+}
+
 .scheduled-items {
   min-height: calc(var(--planner-item-height) * 0.5);
   flex-grow: 1;
@@ -149,6 +178,8 @@
 // The item components draw their own box border, so their top/bottom edge
 // goes through --task-row-edge (separator when flat, box border when boxed).
 .normal-tasks-items > :not(.empty),
+.task-group > *,
+.new-task-group-drop-zone > *,
 .deadline-items > :not(.empty) {
   margin-bottom: var(--task-list-row-gap);
   border-top: var(--task-row-edge);

@@ -47,6 +47,7 @@ export class TaskMultiSelectService {
   private readonly _bulkFeedbackSuppressionDepth = signal(0);
   private readonly _isTouchSelectionMode = signal(false);
   private readonly _pendingRemovals = new Set<string>();
+  private _plannerGroupDragTaskId: string | null = null;
   /**
    * Hosts of destroyed `<task>` components. The list's leave animation keeps
    * a destroyed host in the DOM for a moment, so "is there a row?" must never
@@ -89,6 +90,19 @@ export class TaskMultiSelectService {
 
   has(id: string): boolean {
     return this._selectedIds().has(id);
+  }
+
+  /** Drag intent is transient and must survive CDK replacing the dragged DOM row. */
+  beginPlannerGroupDrag(taskId: string): void {
+    this._plannerGroupDragTaskId = taskId;
+  }
+
+  isPlannerGroupDrag(taskId: string): boolean {
+    return this._plannerGroupDragTaskId === taskId;
+  }
+
+  endPlannerGroupDrag(): void {
+    this._plannerGroupDragTaskId = null;
   }
 
   selectedIdsInDomOrder(): string[] {
@@ -160,6 +174,22 @@ export class TaskMultiSelectService {
       // (An emptied selection already went through _setSelectedIds' full clear.)
       this._dropAnchor();
     }
+  }
+
+  /** Cmd/Ctrl-click on a Planner group selects its visible members as one unit. */
+  togglePlannerGroup(
+    ids: readonly string[],
+    anchorId: string,
+    anchorRow: HTMLElement,
+  ): void {
+    if (!ids.length) return;
+    const selected = this._selectedIds();
+    if (selected.size === ids.length && ids.every((id) => selected.has(id))) {
+      this.clear();
+      return;
+    }
+    this._setSelectedIds(new Set(ids));
+    this._setAnchor(anchorId, anchorRow);
   }
 
   /**
