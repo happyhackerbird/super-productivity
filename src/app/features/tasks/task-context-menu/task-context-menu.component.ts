@@ -3,6 +3,7 @@ import {
   ChangeDetectorRef,
   Component,
   input,
+  output,
   signal,
   viewChild,
   inject,
@@ -22,6 +23,8 @@ export class TaskContextMenuComponent {
 
   task = input.required<TaskWithSubTasks | Task>();
   isAdvancedControls = input<boolean>(false);
+  isPlannerGroupSelectable = input<boolean>(false);
+  selectPlannerGroup = output();
 
   readonly isOpen = signal(false);
 

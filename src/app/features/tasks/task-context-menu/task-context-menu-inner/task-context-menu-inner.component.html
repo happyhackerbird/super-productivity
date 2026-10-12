@@ -104,6 +104,17 @@
       </span>
     </button>
   }
+  @if (isTouchActive() && isPlannerGroupSelectable()) {
+    <button
+      (click)="selectPlannerGroup.emit()"
+      mat-menu-item
+    >
+      <span class="menuItemLeft">
+        <mat-icon>select_all</mat-icon>
+        {{ T.F.PLANNER.SELECT_GROUP | translate }}
+      </span>
+    </button>
+  }
   @if (
     isTimeTrackingEnabled() &&
     ((isAdvancedControls() && isTouchActive()) || !isAdvancedControls()) &&

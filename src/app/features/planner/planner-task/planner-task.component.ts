@@ -381,6 +381,20 @@ export class PlannerTaskComponent implements OnInit, OnDestroy, AfterViewInit {
     this._isModifierGroupDrag.set(false);
   }
 
+  /**
+   * Touch stand-in for Cmd/Ctrl-click: selects the group from the context menu,
+   * so a long-press drag of any member then moves the whole group.
+   */
+  selectWholeGroup(): void {
+    const host = this._elementRef.nativeElement as HTMLElement;
+    const ids = this._plannerGroupIds(host);
+    const selected = this._multiSelect.selectedIds();
+    if (selected.size === ids.length && ids.every((id) => selected.has(id))) {
+      return;
+    }
+    this._multiSelect.togglePlannerGroup(ids, this.task().id, host);
+  }
+
   private _plannerGroupIds(host: HTMLElement): string[] {
     if (this.plannerGroupTasks().length) {
       return this.plannerGroupTasks().map((task) => task.id);

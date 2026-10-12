@@ -152,6 +152,8 @@ export class TaskContextMenuInnerComponent implements AfterViewInit, OnDestroy {
   readonly DEFAULT_PROJECT_ICON = DEFAULT_PROJECT_ICON;
 
   isAdvancedControls = input<boolean>(false);
+  // Planner rows in a group offer to select it; touch has no Cmd/Ctrl-click.
+  isPlannerGroupSelectable = input<boolean>(false);
   todayList = toSignal(this._store.select(selectTodayTaskIds), { initialValue: [] });
   isOnTodayList = computed(() => this.task && this.todayList().includes(this.task.id));
   readonly isTimeTrackingEnabled = computed(
@@ -166,6 +168,7 @@ export class TaskContextMenuInnerComponent implements AfterViewInit, OnDestroy {
 
   // eslint-disable-next-line @angular-eslint/no-output-native
   close = output();
+  selectPlannerGroup = output();
 
   contextMenuPosition: { x: string; y: string } = { x: '100px', y: '100px' };
 

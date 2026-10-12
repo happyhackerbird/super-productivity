@@ -958,7 +958,8 @@
         "REMOVED_PLAN_DATE": "Removed plan date for task \"{{taskTitle}}\"",
         "TASK_ALREADY_PLANNED": "Task is already planned for {{date}}",
         "TASK_PLANNED_FOR": "Task planned for <strong>{{date}}</strong>{{extra}}"
-      }
+      },
+      "SELECT_GROUP": "Select group"
     },
     "POMODORO": {
       "BREAK_IS_DONE": "Break is over!"

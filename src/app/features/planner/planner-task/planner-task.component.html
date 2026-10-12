@@ -105,5 +105,7 @@
   <task-context-menu
     #taskContextMenu
     [task]="task()"
+    [isPlannerGroupSelectable]="plannerGroupTasks().length > 0"
+    (selectPlannerGroup)="selectWholeGroup()"
   ></task-context-menu>
 }

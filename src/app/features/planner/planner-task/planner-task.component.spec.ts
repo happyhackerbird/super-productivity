@@ -848,6 +848,33 @@ describe('PlannerTaskComponent', () => {
     });
   });
 
+  describe('select group (touch)', () => {
+    const members = [makeTask(), makeTask({ id: 't2' })];
+
+    it('selects every member of the group the task is in', () => {
+      const { fixture, component } = create(members[0], true);
+      fixture.componentRef.setInput('plannerGroupTasks', members);
+
+      component.selectWholeGroup();
+
+      expect(multiSelectMock.togglePlannerGroup).toHaveBeenCalledOnceWith(
+        ['t1', 't2'],
+        't1',
+        fixture.nativeElement,
+      );
+    });
+
+    it('keeps an already selected group selected', () => {
+      multiSelectMock.selectedIds.set(new Set(['t1', 't2']));
+      const { fixture, component } = create(members[0], true);
+      fixture.componentRef.setInput('plannerGroupTasks', members);
+
+      component.selectWholeGroup();
+
+      expect(multiSelectMock.togglePlannerGroup).not.toHaveBeenCalled();
+    });
+  });
+
   describe('touch selection', () => {
     it('selects planner cards by tapping their title or host without opening details', () => {
       const { fixture, component } = create(makeTask(), true);
