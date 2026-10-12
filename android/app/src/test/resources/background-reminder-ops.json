@@ -364,6 +364,7 @@
           "issuePoints",
           "issueLastSyncedValues",
           "priority",
+          "plannerGroup",
           "dueDay",
           "hasPlannedTime",
           "deadlineDay",
