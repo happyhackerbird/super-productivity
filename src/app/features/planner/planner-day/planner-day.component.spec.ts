@@ -1,5 +1,5 @@
 import { signal } from '@angular/core';
-import { ComponentFixture, TestBed } from '@angular/core/testing';
+import { ComponentFixture, fakeAsync, TestBed, tick } from '@angular/core/testing';
 import { registerLocaleData } from '@angular/common';
 import localeDe from '@angular/common/locales/de';
 import { provideMockStore } from '@ngrx/store/testing';
@@ -19,6 +19,10 @@ import { PlannerActions } from '../store/planner.actions';
 import { selectPlannerState } from '../store/planner.selectors';
 import { selectTodayTaskIds } from '../../work-context/store/work-context.selectors';
 import { selectTodayTagTaskIds } from '../../tag/store/tag.reducer';
+import { TaskMultiSelectService } from '../../tasks/task-multi-select.service';
+import { isMultiEntityOperation } from '../../../op-log/util/get-op-entity-ids.util';
+import { PersistentActionMeta } from '../../../op-log/core/persistent-action.interface';
+import { Action } from '@ngrx/store';
 
 describe('PlannerDayComponent', () => {
   const createComponent = (
@@ -240,6 +244,50 @@ describe('PlannerDayComponent', () => {
         PlannerActions.moveInList({ targetDay: DAY, fromIndex: 0, toIndex: 1 }),
       );
     });
+
+    // Sync: a bulk update naming every member would be one multi-entity op,
+    // which conflict resolution cannot split.
+    it('moves a selected group to another day with one entity per action', fakeAsync(() => {
+      const OTHER_DAY = '2026-05-12';
+      const members = ['m1', 'm2', 'm3'].map((id) =>
+        task(id, { plannerGroup: `${OTHER_DAY}:g1` }),
+      );
+      const { component, dispatch } = createForDrop(true, {
+        ungroupedTasks: [task('a')],
+        taskGroups: [],
+      });
+      const groupEl = document.createElement('div');
+      groupEl.classList.add('task-group');
+      const source = {
+        data: OTHER_DAY,
+        element: { nativeElement: groupEl },
+        getSortedItems: () => members.map((data) => ({ data })),
+      };
+      TestBed.inject(TaskMultiSelectService).togglePlannerGroup(
+        members.map((m) => m.id),
+        'm1',
+        document.createElement('div'),
+      );
+
+      component.drop(
+        'TODO',
+        [task('a')],
+        dropEv(members[0], { previousContainer: source as never }),
+      );
+      tick();
+
+      const actions = dispatch.calls.allArgs().map(([a]) => a as Action);
+      expect(actions.map((a) => a.type)).toEqual([
+        ...members.map(() => PlannerActions.transferTask.type),
+        ...members.map(() => TaskSharedActions.updateTask.type),
+      ]);
+      for (const action of actions) {
+        const meta = (action as Action & { meta: PersistentActionMeta }).meta;
+        expect(isMultiEntityOperation(meta)).withContext(action.type).toBeFalse();
+        expect(meta.isBulk).withContext(action.type).toBeFalsy();
+      }
+      expect(TestBed.inject(TaskMultiSelectService).selectedIds().size).toBe(0);
+    }));
 
     it('lets untimed tasks only enter a scheduled list that has items', () => {
       const { component } = createForDrop(true, {});

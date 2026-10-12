@@ -218,3 +218,43 @@ export const planWholeGroupMove = ({
     });
   return changes;
 };
+
+export interface WholeGroupMoveActionParams {
+  // the moved tasks, in their order
+  movedTasks: TaskCopy[];
+  prevDay: string;
+  newDay: string;
+  today: string;
+  // where the moved tasks start in the stored order of newDay
+  targetIndex: number;
+  groupChanges: { id: string; plannerGroup: string | null }[];
+}
+
+/**
+ * Plans the actions of a whole group move. Every action names one entity: a
+ * bulk task update would be one op naming every member, which conflict
+ * resolution cannot split and stops sync on (UnsupportedMultiEntityConflictError).
+ */
+export const planWholeGroupMoveActions = ({
+  movedTasks,
+  prevDay,
+  newDay,
+  today,
+  targetIndex,
+  groupChanges,
+}: WholeGroupMoveActionParams): Action[] => [
+  ...(prevDay === newDay
+    ? []
+    : movedTasks.map((task, index) =>
+        PlannerActions.transferTask({
+          task,
+          prevDay,
+          newDay,
+          targetIndex: targetIndex + index,
+          today,
+        }),
+      )),
+  ...groupChanges.map(({ id, plannerGroup }) =>
+    TaskSharedActions.updateTask({ task: { id, changes: { plannerGroup } } }),
+  ),
+];

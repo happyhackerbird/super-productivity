@@ -44,8 +44,11 @@ import { selectPlannerState } from '../store/planner.selectors';
 import { selectTodayTaskIds } from '../../work-context/store/work-context.selectors';
 import { selectTodayTagTaskIds } from '../../tag/store/tag.reducer';
 import { createPlannerGroupId } from '../store/planner-task-groups.util';
-import { planGroupDrop, planWholeGroupMove } from './plan-group-drop.util';
-import { SUPER_SYNC_MAX_ENTITY_IDS_PER_OP } from '@sp/shared-schema';
+import {
+  planGroupDrop,
+  planWholeGroupMove,
+  planWholeGroupMoveActions,
+} from './plan-group-drop.util';
 
 @Component({
   selector: 'planner-day',
@@ -296,32 +299,17 @@ export class PlannerDayComponent {
     groupChanges: { id: string; plannerGroup: string | null }[],
   ): void {
     const today = this._dateService.todayStr();
-    if (prevDay !== newDay) {
-      const targetIndex =
+    planWholeGroupMoveActions({
+      movedTasks: tasks,
+      prevDay,
+      newDay,
+      today,
+      targetIndex:
         newDay === today
           ? this._storedTodayTaskIds().length
-          : (this._plannerState().days[newDay] || []).length;
-      tasks.forEach((task, index) =>
-        this._store.dispatch(
-          PlannerActions.transferTask({
-            task,
-            prevDay,
-            newDay,
-            targetIndex: targetIndex + index,
-            today,
-          }),
-        ),
-      );
-    }
-    for (let i = 0; i < groupChanges.length; i += SUPER_SYNC_MAX_ENTITY_IDS_PER_OP) {
-      this._store.dispatch(
-        TaskSharedActions.updateTasks({
-          tasks: groupChanges
-            .slice(i, i + SUPER_SYNC_MAX_ENTITY_IDS_PER_OP)
-            .map(({ id, plannerGroup }) => ({ id, changes: { plannerGroup } })),
-        }),
-      );
-    }
+          : (this._plannerState().days[newDay] || []).length,
+      groupChanges,
+    }).forEach((action) => this._store.dispatch(action));
     this.multiSelect.clear();
   }
 

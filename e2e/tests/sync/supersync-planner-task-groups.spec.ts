@@ -246,6 +246,84 @@ test.describe('@supersync Planner task groups', () => {
     }
   });
 
+  // The move writes one op per task. As one bulk update naming every member, it
+  // stopped sync on a device that had edited any member (multi-entity conflict).
+  test('a group moved to another day and a concurrent rename of a member both survive', async ({
+    browser,
+    baseURL,
+    testRunId,
+  }) => {
+    const uniqueId = Date.now();
+    let clientA: SimulatedE2EClient | null = null;
+    let clientB: SimulatedE2EClient | null = null;
+
+    try {
+      const syncConfig = getSuperSyncConfig(await createTestUser(testRunId));
+      clientA = await createSimulatedClient(browser, baseURL!, 'A', testRunId);
+      await clientA.sync.setupSuperSync(syncConfig);
+      clientB = await createSimulatedClient(browser, baseURL!, 'B', testRunId);
+      await clientB.sync.setupSuperSync(syncConfig);
+
+      const first = `GroupMoveFirst-${uniqueId}`;
+      const second = `GroupMoveSecond-${uniqueId}`;
+      const renamed = `GroupMoveRenamed-${uniqueId}`;
+      for (const taskName of [first, second, `GroupMoveOther-${uniqueId}`]) {
+        await clientA.workView.addTask(taskName);
+      }
+      const today = await getDbDateStr(clientA.page);
+      const tomorrow = await getDbDateStr(clientA.page, 1);
+      const dayA = await openPlannerDay(clientA.page, today);
+      await dragTo(clientA.page, taskIn(dayA, first), () =>
+        centerOf(dayA.locator(NEW_GROUP_DROP_ZONE)),
+      );
+      await dragTo(clientA.page, taskIn(dayA, second), () =>
+        bottomOf(dayA.locator(TASK_GROUP).first()),
+      );
+      const group = dayA.locator(TASK_GROUP).first();
+      await expect(group.locator('planner-task')).toHaveCount(2);
+      await syncBoth(clientA, clientB);
+      await waitForTask(clientB.page, second);
+
+      // concurrent: A moves the whole group to tomorrow, B renames a member
+      await clientA.page.keyboard.down('Meta');
+      await group.locator('planner-task').first().click();
+      await clientA.page.keyboard.up('Meta');
+      await expect(group.locator('planner-task.isMultiSelected')).toHaveCount(2);
+      const tomorrowA = clientA.page.locator(`planner-day[data-day="${tomorrow}"]`);
+      await dragTo(clientA.page, group.locator('planner-task').last(), () =>
+        centerOf(tomorrowA.locator(NEW_GROUP_DROP_ZONE)),
+      );
+      await expect(dayA.locator(TASK_GROUP)).toHaveCount(0);
+      await expect(tomorrowA.locator(`${TASK_GROUP} planner-task`)).toHaveCount(2);
+      await renameTask(clientB, second, renamed);
+
+      await syncBoth(clientA, clientB);
+
+      const firstOnA = await getPlannerGroupOfTask(clientA.page, first);
+      expect(firstOnA?.plannerGroup).toMatch(new RegExp(`^${tomorrow}:.+`));
+      await expect
+        .poll(
+          async () => (await getPlannerGroupOfTask(clientA!.page, renamed))?.plannerGroup,
+        )
+        .toBe(firstOnA?.plannerGroup);
+      await expect
+        .poll(() => getPlannerGroupOfTask(clientB!.page, first))
+        .toEqual(firstOnA);
+      await expect
+        .poll(
+          async () => (await getPlannerGroupOfTask(clientB!.page, renamed))?.plannerGroup,
+        )
+        .toBe(firstOnA?.plannerGroup);
+      await navigateToWorkView(clientB);
+      const tomorrowB = await openPlannerDay(clientB.page, tomorrow);
+      await expect(tomorrowB.locator(`${TASK_GROUP} planner-task`)).toHaveCount(2);
+      await expect(taskIn(tomorrowB.locator(TASK_GROUP), renamed)).toHaveCount(1);
+    } finally {
+      if (clientA) await closeClient(clientA);
+      if (clientB) await closeClient(clientB);
+    }
+  });
+
   test('concurrent groups for the same task converge to one group', async ({
     browser,
     baseURL,

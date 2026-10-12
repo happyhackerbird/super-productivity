@@ -2,6 +2,7 @@ import {
   GroupDropParams,
   planGroupDrop,
   planWholeGroupMove,
+  planWholeGroupMoveActions,
 } from './plan-group-drop.util';
 import {
   createPlannerGroupId,
@@ -16,6 +17,8 @@ import { TaskCopy } from '../../tasks/task.model';
 import { plannerReducer, PlannerState } from '../store/planner.reducer';
 import { moveItemAfterAnchor } from '../../work-context/store/work-context-meta.helper';
 import { Action } from '@ngrx/store';
+import { PersistentActionMeta } from '../../../op-log/core/persistent-action.interface';
+import { isMultiEntityOperation } from '../../../op-log/util/get-op-entity-ids.util';
 
 const TODAY = '2026-09-29';
 const D1 = '2026-09-30';
@@ -551,5 +554,151 @@ describe('planWholeGroupMove', () => {
       ['a1', 'b1'],
       ['c1'],
     ]);
+  });
+});
+
+describe('planWholeGroupMoveActions', () => {
+  const moved = [task('m1'), task('m2'), task('m3')];
+  const groupChanges = [
+    { id: 'm1', plannerGroup: `${D2}:g9` },
+    { id: 'm2', plannerGroup: `${D2}:g9` },
+    { id: 'm3', plannerGroup: `${D2}:g9` },
+    { id: 'u1', plannerGroup: null },
+  ];
+
+  it('transfers each task to the new day, then writes each group value', () => {
+    expect(
+      planWholeGroupMoveActions({
+        movedTasks: moved,
+        prevDay: D1,
+        newDay: D2,
+        today: TODAY,
+        targetIndex: 4,
+        groupChanges,
+      }),
+    ).toEqual([
+      ...moved.map((t, i) =>
+        PlannerActions.transferTask({
+          task: t,
+          prevDay: D1,
+          newDay: D2,
+          targetIndex: 4 + i,
+          today: TODAY,
+        }),
+      ),
+      setGroup('m1', `${D2}:g9`),
+      setGroup('m2', `${D2}:g9`),
+      setGroup('m3', `${D2}:g9`),
+      setGroup('u1', null),
+    ]);
+  });
+
+  it('only writes the group values within the same day', () => {
+    expect(
+      types(
+        planWholeGroupMoveActions({
+          movedTasks: moved,
+          prevDay: D2,
+          newDay: D2,
+          today: TODAY,
+          targetIndex: 0,
+          groupChanges,
+        }),
+      ),
+    ).toEqual(groupChanges.map(() => TaskSharedActions.updateTask.type));
+  });
+});
+
+/**
+ * Sync: every group operation is written as ops that each name ONE entity.
+ * Conflict resolution cannot split an op naming several tasks (e.g. the bulk
+ * `updateTasks`); a concurrent edit of any of them stops sync with
+ * UnsupportedMultiEntityConflictError on the receiving device.
+ */
+describe('task group operations stay single-entity', () => {
+  const GROUP_ACTION_TYPES: string[] = [
+    TaskSharedActions.updateTask.type,
+    PlannerActions.transferTask.type,
+    PlannerActions.moveInList.type,
+    moveTaskInTodayList.type,
+  ];
+
+  const expectSingleEntity = (actions: Action[]): void => {
+    for (const action of actions) {
+      const meta = (action as Action & { meta?: PersistentActionMeta }).meta;
+      expect(GROUP_ACTION_TYPES).withContext(action.type).toContain(action.type);
+      expect(meta?.isPersistent).withContext(action.type).toBeTrue();
+      expect(meta?.isBulk).withContext(action.type).toBeFalsy();
+      expect(meta && isMultiEntityOperation(meta))
+        .withContext(action.type)
+        .toBeFalse();
+    }
+  };
+
+  it('for drops into the plain list, a group or a new group, from any day', () => {
+    const DAY_IDS = ['a', 'b', 'c', 'd', 'e'];
+    const tasks = [
+      task('a'),
+      task('c', { plannerGroup: `${D1}:g1` }),
+      task('e', { plannerGroup: `${TODAY}:g1` }),
+      task('d', { dueWithTime: 123 }),
+    ];
+    const lists: { targetGroupId: string | null; targetTaskIds: string[] }[] = [
+      { targetGroupId: null, targetTaskIds: ['b', 'd'] },
+      { targetGroupId: 'g1', targetTaskIds: ['a', 'c', 'e'] },
+      { targetGroupId: createPlannerGroupId(), targetTaskIds: [] },
+    ];
+    let planned = 0;
+    for (const t of tasks) {
+      for (const [prevDay, newDay] of [
+        [D1, D1],
+        [D2, D1],
+        [TODAY, TODAY],
+        [D1, TODAY],
+      ]) {
+        for (const list of lists) {
+          for (const dropIndex of [0, 1, 3]) {
+            const actions = planGroupDrop(
+              params({
+                task: t,
+                prevDay,
+                newDay,
+                ...list,
+                dropIndex,
+                dayTaskIds: DAY_IDS,
+                storedTodayTaskIds: DAY_IDS,
+              }),
+            );
+            planned += actions.length;
+            expectSingleEntity(actions);
+          }
+        }
+      }
+    }
+    expect(planned).toBeGreaterThan(0);
+  });
+
+  it('for moving a whole group of many tasks to another day', () => {
+    const members = Array.from({ length: 40 }, (_, i) =>
+      task(`m${i}`, { plannerGroup: `${D1}:g1` }),
+    );
+    const groupChanges = planWholeGroupMove({
+      movedTasks: members,
+      newDay: D2,
+      ungroupedTasks: [task('u1')],
+      taskGroups: [],
+      insertAt: 0,
+    });
+    const actions = planWholeGroupMoveActions({
+      movedTasks: members,
+      prevDay: D1,
+      newDay: D2,
+      today: TODAY,
+      targetIndex: 1,
+      groupChanges,
+    });
+    expect(actions.length).toBe(members.length + groupChanges.length);
+    expectSingleEntity(actions);
+    expect(types(actions)).not.toContain(TaskSharedActions.updateTasks.type);
   });
 });
