@@ -147,7 +147,7 @@ export class PlannerTaskComponent implements OnInit, OnDestroy, AfterViewInit {
     this.focusable() ? this._multiSelect.selectedIds().has(this.task().id) : false,
   );
   readonly isTouchSelecting = computed(
-    () => !!this._cardList && this._multiSelect.isTouchSelectionMode(),
+    () => this.focusable() && this._multiSelect.isTouchSelectionMode(),
   );
 
   readonly T = T;
@@ -196,7 +196,7 @@ export class PlannerTaskComponent implements OnInit, OnDestroy, AfterViewInit {
   @HostListener('click', ['$event'])
   async clickHandler(event: MouseEvent): Promise<void> {
     const target = event.target as HTMLElement | null;
-    if (isLinkTarget(target)) {
+    if (this.isTouchSelecting() || isLinkTarget(target)) {
       return;
     }
     // Mirrors the modifier/touch half of task.component's clear (which lives in
@@ -235,6 +235,7 @@ export class PlannerTaskComponent implements OnInit, OnDestroy, AfterViewInit {
   onDoubleClick(event: MouseEvent): void {
     if (
       !this.focusable() ||
+      this.isTouchSelecting() ||
       event.ctrlKey ||
       event.metaKey ||
       event.shiftKey ||
@@ -279,6 +280,9 @@ export class PlannerTaskComponent implements OnInit, OnDestroy, AfterViewInit {
     if (isTouchActive() || IS_HYBRID_DEVICE) {
       const el = this._elementRef.nativeElement;
       const onStart = (): void => {
+        if (this.isTouchSelecting()) {
+          return;
+        }
         this._dragReadyTimeout = window.setTimeout(() => {
           this.isDragReady.set(true);
         }, DRAG_DELAY_FOR_TOUCH);
@@ -312,7 +316,7 @@ export class PlannerTaskComponent implements OnInit, OnDestroy, AfterViewInit {
         // and title editing. Tapping the link needs the mode left first.
         if (this.isTouchSelecting()) {
           event.preventDefault();
-          event.stopPropagation();
+          event.stopImmediatePropagation();
           host.focus();
           this._multiSelect.toggle(this.task().id);
           return;
@@ -637,6 +641,7 @@ export class PlannerTaskComponent implements OnInit, OnDestroy, AfterViewInit {
           data: {
             okTxt: T.F.TASK.D_CONFIRM_DELETE.OK,
             message: T.F.TASK.D_CONFIRM_DELETE.MSG,
+            isFocusConfirm: true,
             translateParams: { title: this.task().title },
           },
         })

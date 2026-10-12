@@ -27,11 +27,16 @@ import { DataInitStateService } from './app/core/data-init/data-init-state.servi
 // Type definitions for window.ea are in ./app/core/window-ea.d.ts
 import { App as CapacitorApp } from '@capacitor/app';
 import { GlobalErrorHandler } from './app/core/error-handler/global-error-handler.class';
-import { bootstrapApplication, BrowserModule } from '@angular/platform-browser';
+import {
+  bootstrapApplication,
+  BrowserModule,
+  REMOVE_STYLES_ON_COMPONENT_DESTROY,
+} from '@angular/platform-browser';
 import {
   HTTP_INTERCEPTORS,
   provideHttpClient,
   withInterceptorsFromDi,
+  withXhr,
 } from '@angular/common/http';
 import { MarkdownModule, MARKED_OPTIONS, SANITIZE } from 'ngx-markdown';
 import { MAT_FORM_FIELD_DEFAULT_OPTIONS } from '@angular/material/form-field';
@@ -85,6 +90,8 @@ import { OperationWriteFlushService } from './app/op-log/sync/operation-write-fl
 import { TaskService } from './app/features/tasks/task.service';
 import { LocalRestApiFeatureBridgeService } from './app/features/tasks/local-rest-api-feature-bridge.service';
 import { LOCAL_REST_API_FEATURE_BRIDGE } from './app/core/electron/local-rest-api-feature-bridge';
+import { LOCAL_REST_API_FEATURE_ROUTES } from './app/core/electron/local-rest-api-feature-routes';
+import { LocalRestApiTaskRepeatCfgRoutesService } from './app/features/task-repeat-cfg/local-rest-api-task-repeat-cfg-routes.service';
 import { PluginOAuthRedirectHandler } from './app/plugins/oauth/plugin-oauth-redirect.handler';
 import { OAuthCallbackHandlerService } from './app/imex/sync/oauth-callback-handler.service';
 import { GlobalConfigService } from './app/features/config/global-config.service';
@@ -212,7 +219,7 @@ bootstrapApplication(AppComponent, {
       CdkDropListGroup,
     ),
     { provide: ErrorHandler, useClass: GlobalErrorHandler },
-    provideHttpClient(withInterceptorsFromDi()),
+    provideHttpClient(withXhr(), withInterceptorsFromDi()),
     {
       provide: HTTP_INTERCEPTORS,
       useClass: NetworkRetryInterceptorService,
@@ -226,6 +233,11 @@ bootstrapApplication(AppComponent, {
     {
       provide: LOCAL_REST_API_FEATURE_BRIDGE,
       useClass: LocalRestApiFeatureBridgeService,
+    },
+    {
+      provide: LOCAL_REST_API_FEATURE_ROUTES,
+      useClass: LocalRestApiTaskRepeatCfgRoutesService,
+      multi: true,
     },
     {
       provide: MAT_DATE_FORMATS,
@@ -261,6 +273,13 @@ bootstrapApplication(AppComponent, {
       ? [{ provide: MAT_DIALOG_DEFAULT_OPTIONS, useValue: { autoFocus: false } }]
       : []),
     provideAnimationsAsync(),
+    // Keep component <style> elements once added. Removing them when the last
+    // instance is destroyed means every snack and dialog adds its stylesheets on
+    // open and removes them on close; each change makes the browser rebuild its
+    // style rules and recalc styles, which stutters the open/close animations.
+    // Component styles must therefore never rely on being removed: no unscoped
+    // `::ng-deep` rules.
+    { provide: REMOVE_STYLES_ON_COMPONENT_DESTROY, useValue: false },
     {
       provide: MATERIAL_ANIMATIONS,
       deps: [GlobalConfigService],
@@ -380,7 +399,7 @@ bootstrapApplication(AppComponent, {
 }).then((appRef) => {
   appInjector = appRef.injector;
 
-  // Expose store + HydrationStateService for e2e tests in dev/stage builds.
+  // Expose store and persistence helpers for E2E tests in non-production builds.
   // Used by the screenshot pipeline to flip locale / customTheme inside a
   // single session (see e2e/store-screenshots/helpers.ts) and by #6230
   // recurring-task tests. Stripped from production via the env guard.
@@ -390,6 +409,13 @@ bootstrapApplication(AppComponent, {
       (window as unknown as { __e2eTestHelpers?: unknown }).__e2eTestHelpers = {
         store: storeRef,
         hydrationState: appRef.injector.get(m.HydrationStateService),
+        flushPendingWrites: () =>
+          appRef.injector.get(OperationWriteFlushService).flushPendingWrites(),
+        compact: async () => {
+          const { OperationLogCompactionService } =
+            await import('./app/op-log/persistence/operation-log-compaction.service');
+          return appRef.injector.get(OperationLogCompactionService).compact();
+        },
       };
     });
   }
@@ -424,13 +450,31 @@ bootstrapApplication(AppComponent, {
 
   // Lazily load and register focus-mode effects during idle time.
   // Safe to defer: focus-mode requires explicit user activation (clicking the
-  // focus button), which cannot happen before idle callback fires.
+  // focus button), which cannot happen before idle callback fires. Restoring a
+  // session killed in the background waits for data load, so it is not raced either.
   const registerLazyEffects = async (): Promise<void> => {
-    const { FocusModeEffects } =
-      await import('./app/features/focus-mode/store/focus-mode.effects');
+    const [{ FocusModeEffects }, sessionPersistence] = await Promise.all([
+      import('./app/features/focus-mode/store/focus-mode.effects'),
+      IS_IOS_NATIVE
+        ? import('./app/features/focus-mode/store/focus-mode-session-persistence.effects')
+        : null,
+    ]);
     const envInjector = appRef.injector.get(EnvironmentInjector);
     createEnvironmentInjector(
-      [importProvidersFrom(EffectsModule.forFeature([FocusModeEffects]))],
+      [
+        importProvidersFrom(
+          // Session restore relies on FocusModeEffects (completion, logging),
+          // so it registers after them. iOS only: it kills backgrounded
+          // WebViews; Android recovers from its native foreground service, and
+          // on desktop a closed app means the user ended the session.
+          EffectsModule.forFeature([
+            FocusModeEffects,
+            ...(sessionPersistence
+              ? [sessionPersistence.FocusModeSessionPersistenceEffects]
+              : []),
+          ]),
+        ),
+      ],
       envInjector,
     );
   };

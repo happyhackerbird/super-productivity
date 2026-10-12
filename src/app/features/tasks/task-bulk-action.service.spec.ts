@@ -361,6 +361,10 @@ describe('TaskBulkActionService', () => {
           }),
         }),
       );
+      // No undo for a bulk delete: Enter must not confirm it.
+      expect(
+        matDialog.open.calls.mostRecent().args[1]?.data.isFocusConfirm,
+      ).toBeUndefined();
       // top-level ids in one op; the lone subtask via the singular path so
       // older clients keep a consistent parent (rule 10)
       expect(taskService.removeMultipleTasks).toHaveBeenCalledWith(['parent']);
@@ -415,7 +419,10 @@ describe('TaskBulkActionService', () => {
       expect(matDialog.open).toHaveBeenCalledWith(
         jasmine.anything(),
         jasmine.objectContaining({
-          data: jasmine.objectContaining({ message: T.F.TASK.D_CONFIRM_DELETE.MSG }),
+          data: jasmine.objectContaining({
+            message: T.F.TASK.D_CONFIRM_DELETE.MSG,
+            isFocusConfirm: true,
+          }),
         }),
       );
       expect(taskService.remove).toHaveBeenCalled();
@@ -423,6 +430,14 @@ describe('TaskBulkActionService', () => {
   });
 
   describe('moveToProject', () => {
+    it('uses the drag snapshot even if selection has cleared after drag end', async () => {
+      select([t('first'), t('second')]);
+      selectedIds.set(new Set());
+      await service.moveToProject('p2', ['second', 'deleted', 'first']);
+      expect(
+        moveToProjectService.moveToProject.calls.allArgs().map(([task]) => task.id),
+      ).toEqual(['second', 'first']);
+    });
     it('moves parents once per repeat config, skips subtasks and reports partial', async () => {
       select([
         t('r1', { repeatCfgId: 'cfg' }),
@@ -566,7 +581,7 @@ describe('TaskBulkActionService', () => {
 
   describe('setPriority', () => {
     it('updates only the tasks whose priority differs', async () => {
-      select([t('a'), t('same', { priority: 3 }), t('low', { priority: 1 })]);
+      select([t('a'), t('same', { priority: 'high' }), t('low', { priority: 1 })]);
 
       await service.setPriority(3);
 
@@ -585,7 +600,7 @@ describe('TaskBulkActionService', () => {
     });
 
     it('does nothing when every task already has that priority', async () => {
-      select([t('a', { priority: 2 }), t('b', { priority: 2 })]);
+      select([t('a', { priority: 2 }), t('b', { priority: 'medium' })]);
 
       await service.setPriority(2);
 

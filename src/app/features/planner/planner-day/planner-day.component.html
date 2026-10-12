@@ -69,6 +69,7 @@
         [plannerGroupTasks]="isTaskGroupingEnabled() ? ungroupedTasks : []"
         [cdkDragData]="task"
         [cdkDragStartDelay]="dragDelayForTouch()"
+        [cdkDragDisabled]="multiSelect.isTouchSelectionMode()"
         [cdkDragLockAxis]="isXs() ? 'y' : ''"
         [task]="task"
         [day]="day.dayDate"
@@ -126,6 +127,7 @@
             (cdkDragEnded)="groupTask.onPlannerGroupDragEnded()"
             [cdkDragData]="task"
             [cdkDragStartDelay]="dragDelayForTouch()"
+            [cdkDragDisabled]="multiSelect.isTouchSelectionMode()"
             [cdkDragLockAxis]="isXs() ? 'y' : ''"
             [task]="task"
             [day]="day.dayDate"
@@ -197,6 +199,7 @@
               [focusable]="true"
               [cdkDragData]="scheduledItem.task"
               [cdkDragStartDelay]="dragDelayForTouch()"
+              [cdkDragDisabled]="multiSelect.isTouchSelectionMode()"
               [cdkDragLockAxis]="isXs() ? 'y' : ''"
             ></planner-task>
           }

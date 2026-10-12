@@ -6,6 +6,7 @@ import {
   input,
 } from '@angular/core';
 import { T } from '../../../t.const';
+import { TaskMultiSelectService } from '../../tasks/task-multi-select.service';
 import { CdkDrag, CdkDropList } from '@angular/cdk/drag-drop';
 import { PlannerTaskComponent } from '../planner-task/planner-task.component';
 import { PlannerDeadlineTaskComponent } from '../planner-deadline-task/planner-deadline-task.component';
@@ -38,6 +39,7 @@ import { selectTodayTagTaskIds } from '../../tag/store/tag.reducer';
   ],
 })
 export class PlannerDayOverdueComponent {
+  protected readonly multiSelect = inject(TaskMultiSelectService);
   private _layoutService = inject(LayoutService);
   private readonly _storedTodayTaskIds =
     inject(Store).selectSignal(selectTodayTagTaskIds);

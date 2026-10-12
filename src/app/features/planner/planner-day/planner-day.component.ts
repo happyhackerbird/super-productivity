@@ -9,6 +9,7 @@ import {
   Input,
 } from '@angular/core';
 import { T } from '../../../t.const';
+import { TaskMultiSelectService } from '../../tasks/task-multi-select.service';
 import { PlannerDay, ScheduleItem, ScheduleItemType } from '../planner.model';
 import { CdkDrag, CdkDragDrop, CdkDropList } from '@angular/cdk/drag-drop';
 import { TaskCopy } from '../../tasks/task.model';
@@ -44,7 +45,6 @@ import { selectTodayTaskIds } from '../../work-context/store/work-context.select
 import { selectTodayTagTaskIds } from '../../tag/store/tag.reducer';
 import { createPlannerGroupId } from '../store/planner-task-groups.util';
 import { planGroupDrop, planWholeGroupMove } from './plan-group-drop.util';
-import { TaskMultiSelectService } from '../../tasks/task-multi-select.service';
 import { SUPER_SYNC_MAX_ENTITY_IDS_PER_OP } from '@sp/shared-schema';
 
 @Component({
@@ -71,6 +71,7 @@ import { SUPER_SYNC_MAX_ENTITY_IDS_PER_OP } from '@sp/shared-schema';
   ],
 })
 export class PlannerDayComponent {
+  protected readonly multiSelect = inject(TaskMultiSelectService);
   private _store = inject(Store);
   private _matDialog = inject(MatDialog);
   private _taskService = inject(TaskService);
@@ -78,7 +79,6 @@ export class PlannerDayComponent {
   private _layoutService = inject(LayoutService);
   private _dateTimeFormatService = inject(DateTimeFormatService);
   private _hostElement = inject(ElementRef<HTMLElement>);
-  private _multiSelect = inject(TaskMultiSelectService);
 
   // TODO: Skipped for migration because:
   //  This input is used in a control flow expression (e.g. `@if` or `*ngIf`)
@@ -237,8 +237,8 @@ export class PlannerDayComponent {
     const sourceTasks = ev.previousContainer
       .getSortedItems()
       .map((item) => item.data as TaskCopy);
-    const selected = this._multiSelect.selectedIds();
-    const modifierDrag = this._multiSelect.isPlannerGroupDrag(ev.item.data.id);
+    const selected = this.multiSelect.selectedIds();
+    const modifierDrag = this.multiSelect.isPlannerGroupDrag(ev.item.data.id);
     if (
       !sourceTasks.length ||
       (!modifierDrag && selected.size !== sourceTasks.length) ||
@@ -250,7 +250,7 @@ export class PlannerDayComponent {
     ) {
       return false;
     }
-    this._multiSelect.endPlannerGroupDrag();
+    this.multiSelect.endPlannerGroupDrag();
     if (ev.previousContainer === ev.container) {
       return true;
     }
@@ -322,7 +322,7 @@ export class PlannerDayComponent {
         }),
       );
     }
-    this._multiSelect.clear();
+    this.multiSelect.clear();
   }
 
   private _isInNewGroupDropArea(ev: CdkDragDrop<string, string, TaskCopy>): boolean {
