@@ -1,0 +1,9 @@
+# AOS repository policy (v2, OpenShell sandbox backend) for super-productivity.
+# The harness image has Node 24, npm and Chromium (CHROME_BIN=/usr/bin/chromium for Karma).
+# The checks need only the npm registry: install with ELECTRON_SKIP_BINARY_DOWNLOAD=1 and
+# --ignore-scripts so no package downloads binaries from elsewhere.
+[execution]
+fail_closed = true
+
+[network]
+allow = ["registry.npmjs.org:443"]
