@@ -10,8 +10,13 @@ import { selectTaskRepeatCfgsForExactDay } from './task-repeat-cfg.selectors';
 const cache = new WeakMap<TaskRepeatCfg[], Map<string, TaskRepeatCfg[]>>();
 
 /**
- * Memoized `selectTaskRepeatCfgsForExactDay.projector`. The returned array is
- * shared between calls — callers must not mutate it.
+ * Memoized `selectTaskRepeatCfgsForExactDay.projector`, limited to cfgs whose
+ * occurrences can be projected. The returned array is shared between calls —
+ * callers must not mutate it.
+ *
+ * waitForCompletion cfgs are left out: their next instance only exists once the
+ * current one is completed (it is then created right away on its next scheduled
+ * day), so projecting their schedule would show the task on every future day.
  */
 export const getTaskRepeatCfgsForExactDayCached = (
   taskRepeatCfgs: TaskRepeatCfg[],
@@ -26,7 +31,9 @@ export const getTaskRepeatCfgsForExactDayCached = (
   const key = `${dayDate}_${new Date(dayDate).getTimezoneOffset()}`;
   let result = byDay.get(key);
   if (!result) {
-    result = selectTaskRepeatCfgsForExactDay.projector(taskRepeatCfgs, { dayDate });
+    result = selectTaskRepeatCfgsForExactDay
+      .projector(taskRepeatCfgs, { dayDate })
+      .filter((cfg) => !cfg.waitForCompletion);
     byDay.set(key, result);
   }
   return result;

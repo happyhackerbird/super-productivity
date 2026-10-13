@@ -2001,6 +2001,84 @@ describe('TaskRepeatCfgService', () => {
       // Should return empty array without devError - next occurrence is tomorrow, not due yet
       expect(actions).toEqual([]);
     });
+
+    // The completion effect targets the next scheduled day after today, so the
+    // next instance exists right away (and is the only one the planner shows).
+    describe('targeting the next scheduled day after completion', () => {
+      const today = new Date();
+      const todayStr = formatIsoDate(today);
+      const tomorrow = new Date(today);
+      tomorrow.setDate(tomorrow.getDate() + 1);
+      const tomorrowStr = formatIsoDate(tomorrow);
+
+      const dailyWaitCfg: TaskRepeatCfg = {
+        ...mockTaskRepeatCfg,
+        startDate: todayStr,
+        lastTaskCreationDay: todayStr,
+        waitForCompletion: true,
+        repeatCycle: 'DAILY',
+        repeatEvery: 1,
+      };
+      const todayInstance = (isDone: boolean): TaskWithSubTasks => ({
+        ...mockTaskWithSubTasks,
+        id: getRepeatableTaskId(dailyWaitCfg.id, todayStr),
+        created: today.getTime(),
+        isDone,
+      });
+
+      beforeEach(() => {
+        taskService.getArchiveTasksForRepeatCfgId.and.returnValue(Promise.resolve([]));
+        taskService.createNewTaskWithDefaults.and.callFake((args: any) => ({
+          ...mockTask,
+          id: args.id || mockTask.id,
+          dueDay: args.additional?.dueDay,
+        }));
+      });
+
+      it('creates the next instance for tomorrow once the today instance is done', async () => {
+        taskService.getTasksWithSubTasksByRepeatCfgId$.and.returnValue(
+          of([todayInstance(true)]),
+        );
+
+        const actions = await service._getActionsForTaskRepeatCfg(
+          dailyWaitCfg,
+          tomorrow.getTime(),
+        );
+
+        expect(actions.length).toBe(2);
+        const addTaskAction = actions[0] as ReturnType<typeof TaskSharedActions.addTask>;
+        expect(addTaskAction.type).toBe(TaskSharedActions.addTask.type);
+        expect(addTaskAction.task.id).toBe(
+          getRepeatableTaskId(dailyWaitCfg.id, tomorrowStr),
+        );
+        expect(addTaskAction.task.dueDay).toBe(tomorrowStr);
+        expect(formatIsoDate(new Date(addTaskAction.task.created))).toBe(tomorrowStr);
+        expect(actions[1]).toEqual(
+          updateTaskRepeatCfg({
+            taskRepeatCfg: {
+              id: dailyWaitCfg.id,
+              changes: {
+                lastTaskCreation: addTaskAction.task.created,
+                lastTaskCreationDay: tomorrowStr,
+              },
+            },
+          }),
+        );
+      });
+
+      it('creates nothing for tomorrow while the today instance is still open', async () => {
+        taskService.getTasksWithSubTasksByRepeatCfgId$.and.returnValue(
+          of([todayInstance(false)]),
+        );
+
+        const actions = await service._getActionsForTaskRepeatCfg(
+          dailyWaitCfg,
+          tomorrow.getTime(),
+        );
+
+        expect(actions).toEqual([]);
+      });
+    });
   });
 
   describe('addTaskRepeatCfgToTask dispatch (#5594)', () => {

@@ -19,6 +19,7 @@ import {
 import { DEFAULT_TASK_REPEAT_CFG, TaskRepeatCfgCopy } from '../task-repeat-cfg.model';
 import { addSubTask } from '../../tasks/store/task.actions';
 import { TestScheduler } from 'rxjs/testing';
+import { toArray } from 'rxjs/operators';
 import { TaskSharedActions } from '../../../root-store/meta/task-shared.actions';
 import { PlannerActions } from '../../planner/store/planner.actions';
 import { dateStrToUtcDate } from '../../../util/date-str-to-utc-date';
@@ -1242,6 +1243,156 @@ describe('TaskRepeatCfgEffects - Repeatable Subtasks', () => {
           done();
         },
         error: done.fail,
+      });
+    });
+
+    describe('waitForCompletion creates the next instance on its next scheduled day', () => {
+      const completeAction = TaskSharedActions.updateTask({
+        task: { id: 'parent-task-id', changes: { isDone: true } },
+      });
+      const dayStr = (offset: number): string => {
+        const d = new Date();
+        d.setDate(d.getDate() + offset);
+        return getDbDateStr(d);
+      };
+      const dailyWaitCfg = (add: Partial<TaskRepeatCfgCopy> = {}): TaskRepeatCfgCopy => ({
+        ...mockRepeatCfg,
+        repeatCycle: 'DAILY',
+        repeatEvery: 1,
+        startDate: '2020-01-01',
+        repeatFromCompletionDate: false,
+        waitForCompletion: true,
+        lastTaskCreationDay: dayStr(0),
+        ...add,
+      });
+      const nextTaskActions = [
+        updateTaskRepeatCfg({
+          taskRepeatCfg: {
+            id: 'repeat-cfg-id',
+            changes: { lastTaskCreationDay: dayStr(1) },
+          },
+        }),
+      ];
+      const targetDayOfCall = (): string =>
+        getDbDateStr(
+          taskRepeatCfgService._getActionsForTaskRepeatCfg.calls.mostRecent()
+            .args[1] as number,
+        );
+
+      beforeEach(() => {
+        taskRepeatCfgService._getActionsForTaskRepeatCfg.and.returnValue(
+          Promise.resolve(nextTaskActions),
+        );
+      });
+
+      it('targets tomorrow when completing the current (today) instance of a daily cfg', (done) => {
+        const cfg = dailyWaitCfg();
+        actions$ = of(completeAction);
+        taskService.getByIdOnce$.and.returnValue(
+          of({ ...mockTask, created: dateStrToUtcDate(dayStr(0)).getTime() }),
+        );
+        taskRepeatCfgService.getTaskRepeatCfgByIdAllowUndefined$.and.returnValue(of(cfg));
+
+        effects.updateStartDateOnComplete$.pipe(toArray()).subscribe({
+          next: (result) => {
+            expect(result).toEqual(nextTaskActions);
+            expect(
+              taskRepeatCfgService._getActionsForTaskRepeatCfg,
+            ).toHaveBeenCalledTimes(1);
+            expect(
+              taskRepeatCfgService._getActionsForTaskRepeatCfg.calls.mostRecent().args[0],
+            ).toEqual(cfg);
+            expect(targetDayOfCall()).toBe(dayStr(1));
+            done();
+          },
+          error: done.fail,
+        });
+      });
+
+      it('targets the next day after today, not today or a past day, for an overdue instance', (done) => {
+        const cfg = dailyWaitCfg({ lastTaskCreationDay: dayStr(-3) });
+        actions$ = of(completeAction);
+        taskService.getByIdOnce$.and.returnValue(
+          of({ ...mockTask, created: dateStrToUtcDate(dayStr(-3)).getTime() }),
+        );
+        taskRepeatCfgService.getTaskRepeatCfgByIdAllowUndefined$.and.returnValue(of(cfg));
+
+        effects.updateStartDateOnComplete$.pipe(toArray()).subscribe({
+          next: () => {
+            expect(targetDayOfCall()).toBe(dayStr(1));
+            done();
+          },
+          error: done.fail,
+        });
+      });
+
+      it('follows the repeat rule (every 3 days) for the next day', (done) => {
+        const cfg = dailyWaitCfg({ repeatEvery: 3, startDate: dayStr(0) });
+        actions$ = of(completeAction);
+        taskService.getByIdOnce$.and.returnValue(
+          of({ ...mockTask, created: dateStrToUtcDate(dayStr(0)).getTime() }),
+        );
+        taskRepeatCfgService.getTaskRepeatCfgByIdAllowUndefined$.and.returnValue(of(cfg));
+
+        effects.updateStartDateOnComplete$.pipe(toArray()).subscribe({
+          next: () => {
+            expect(targetDayOfCall()).toBe(dayStr(3));
+            done();
+          },
+          error: done.fail,
+        });
+      });
+
+      it('creates nothing for a paused cfg', (done) => {
+        actions$ = of(completeAction);
+        taskService.getByIdOnce$.and.returnValue(of(mockTask));
+        taskRepeatCfgService.getTaskRepeatCfgByIdAllowUndefined$.and.returnValue(
+          of(dailyWaitCfg({ isPaused: true })),
+        );
+
+        effects.updateStartDateOnComplete$.pipe(toArray()).subscribe({
+          next: (result) => {
+            expect(result).toEqual([]);
+            expect(
+              taskRepeatCfgService._getActionsForTaskRepeatCfg,
+            ).not.toHaveBeenCalled();
+            done();
+          },
+          error: done.fail,
+        });
+      });
+
+      it('re-anchors first and then creates the next instance when repeatFromCompletionDate is also set', (done) => {
+        const today = dayStr(0);
+        const cfg = dailyWaitCfg({
+          repeatFromCompletionDate: true,
+          lastTaskCreationDay: dayStr(-2),
+        });
+        actions$ = of(completeAction);
+        taskService.getByIdOnce$.and.returnValue(
+          of({ ...mockTask, created: dateStrToUtcDate(dayStr(-2)).getTime() }),
+        );
+        taskRepeatCfgService.getTaskRepeatCfgByIdAllowUndefined$.and.returnValue(of(cfg));
+
+        effects.updateStartDateOnComplete$.pipe(toArray()).subscribe({
+          next: (result) => {
+            expect(result).toEqual([
+              updateTaskRepeatCfg({
+                taskRepeatCfg: {
+                  id: 'repeat-cfg-id',
+                  changes: { startDate: today, lastTaskCreationDay: today },
+                },
+              }),
+              ...nextTaskActions,
+            ]);
+            expect(
+              taskRepeatCfgService._getActionsForTaskRepeatCfg.calls.mostRecent().args[0],
+            ).toEqual({ ...cfg, startDate: today, lastTaskCreationDay: today });
+            expect(targetDayOfCall()).toBe(dayStr(1));
+            done();
+          },
+          error: done.fail,
+        });
       });
     });
 

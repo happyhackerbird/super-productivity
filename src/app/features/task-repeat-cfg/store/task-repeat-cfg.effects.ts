@@ -44,6 +44,7 @@ import { remindOptionToMilliseconds } from '../../tasks/util/remind-option-to-mi
 import { devError } from '../../../util/dev-error';
 import { getFirstRepeatOccurrence } from './get-first-repeat-occurrence.util';
 import { getNextRepeatOccurrence } from './get-next-repeat-occurrence.util';
+import { getNextCreatedOccurrence } from './get-next-created-occurrence.util';
 import { clampPastTimedOccurrence } from './clamp-past-timed-occurrence.util';
 import { SCHEDULE_AFFECTING_FIELDS } from './schedule-affecting-fields.const';
 
@@ -654,27 +655,21 @@ export class TaskRepeatCfgEffects {
         // because getEffectiveRepeatStartDate() prioritizes lastTaskCreationDay when set.
         // Without updating lastTaskCreationDay, the recurrence stays anchored to the old date.
         if (cfg.repeatFromCompletionDate && isLatestInstance) {
-          return rxOf([
-            updateTaskRepeatCfg({
-              taskRepeatCfg: {
-                id: cfg.id as string,
-                changes: {
-                  startDate: today,
-                  lastTaskCreationDay: today,
-                },
-              },
-            }),
-          ]);
+          const changes = { startDate: today, lastTaskCreationDay: today };
+          const reanchorAction = updateTaskRepeatCfg({
+            taskRepeatCfg: { id: cfg.id as string, changes },
+          });
+          if (!cfg.waitForCompletion) {
+            return rxOf([reanchorAction]);
+          }
+          return this._getNextWaitForCompletionInstanceActions$(
+            { ...cfg, ...changes },
+            today,
+          ).pipe(map((nextTaskActions) => [reanchorAction, ...nextTaskActions]));
         }
 
-        // For waitForCompletion, probe creation after any repeat instance is
-        // completed. The service checks whether any live or archived instance
-        // still blocks the gate, so completing an older final blocker can
-        // materialize the next due task immediately.
         if (cfg.waitForCompletion) {
-          return from(
-            this._taskRepeatCfgService._getActionsForTaskRepeatCfg(cfg, Date.now()),
-          ).pipe(map((nextTaskActions) => nextTaskActions));
+          return this._getNextWaitForCompletionInstanceActions$(cfg, today);
         }
 
         return rxOf([]);
@@ -904,6 +899,26 @@ export class TaskRepeatCfgEffects {
       notes: st.notes,
       timeEstimate: st.timeEstimate,
     }));
+  }
+
+  // waitForCompletion: completing an instance creates the next one right away on
+  // its next scheduled day after today (never today or a past day). Planner and
+  // schedule draw no repeat projections for these cfgs, so this instance is the
+  // only one shown until it is completed in turn. The service still checks
+  // whether any other live or archived instance keeps blocking the gate.
+  private _getNextWaitForCompletionInstanceActions$(
+    cfg: TaskRepeatCfg,
+    today: string,
+  ): Observable<
+    Awaited<ReturnType<TaskRepeatCfgService['_getActionsForTaskRepeatCfg']>>
+  > {
+    const nextDueDate = getNextCreatedOccurrence(cfg, dateStrToUtcDate(today));
+    if (!nextDueDate || cfg.isPaused) {
+      return rxOf([]);
+    }
+    return from(
+      this._taskRepeatCfgService._getActionsForTaskRepeatCfg(cfg, nextDueDate.getTime()),
+    );
   }
 
   private _isLatestInstance(task: Task, cfg: TaskRepeatCfgCopy): boolean {

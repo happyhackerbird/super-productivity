@@ -45,6 +45,29 @@ describe('getTaskRepeatCfgsForExactDayCached', () => {
     ]);
   });
 
+  it('does not project waitForCompletion cfgs on any day', () => {
+    const waitCfg = { ...dailyCfg('WAIT'), waitForCompletion: true };
+    const cfgs = [dailyCfg('D'), waitCfg, weeklyMondayCfg('W')];
+
+    // The projector itself still considers the cfg due ...
+    expect(
+      selectTaskRepeatCfgsForExactDay
+        .projector(cfgs, { dayDate: tuesday })
+        .map((c) => c.id),
+    ).toContain('WAIT');
+    // ... but its open instance is the only one that may be shown.
+    for (const day of [monday, tuesday, new Date(2024, 2, 6).getTime()]) {
+      expect(
+        getTaskRepeatCfgsForExactDayCached(cfgs, day).map((c) => c.id),
+      ).not.toContain('WAIT');
+    }
+    // Normal cfgs in the same array keep projecting as before.
+    expect(getTaskRepeatCfgsForExactDayCached(cfgs, monday).map((c) => c.id)).toEqual([
+      'D',
+      'W',
+    ]);
+  });
+
   it('reuses the result for the same cfg array and day', () => {
     const cfgs = [dailyCfg('D')];
     expect(getTaskRepeatCfgsForExactDayCached(cfgs, monday)).toBe(
