@@ -21,6 +21,7 @@
     [cdkDropListEnterPredicate]="enterPredicate"
     [cdkDropListData]="OVERDUE_LIST_ID"
     [cdkDropListAutoScrollStep]="8"
+    (cdkDropListDropped)="dropInGroup(null, $event)"
   >
     @for (task of partitioned().ungroupedTasks; track task.id) {
       <planner-task
@@ -45,6 +46,7 @@
       [cdkDropListEnterPredicate]="enterPredicate"
       [cdkDropListData]="OVERDUE_LIST_ID"
       [cdkDropListAutoScrollStep]="8"
+      (cdkDropListDropped)="dropInGroup(group.id, $event)"
     >
       @for (task of group.tasks; track task.id) {
         <planner-task
