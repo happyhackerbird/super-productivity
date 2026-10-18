@@ -1,0 +1,3 @@
+# Migrated verbatim from the production registry; used for repository-wide checks.
+# Keep the low-concurrency install fallback required by OpenShell npm egress.
+test_command = "(ELECTRON_SKIP_BINARY_DOWNLOAD=1 npm ci --ignore-scripts --no-audit --no-fund --fetch-retries 5 --maxsockets 4 || ELECTRON_SKIP_BINARY_DOWNLOAD=1 npm ci --ignore-scripts --no-audit --no-fund --fetch-retries 5 --maxsockets 2) && npx ts-patch install && npm run env && npm run sync-core:build && npm run sync-providers:build && npm run shared-schema:build && npm run plugin-api:build && npm run test:tools"

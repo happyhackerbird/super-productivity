@@ -30,4 +30,12 @@ In case you want to contribute, but you wouldn't know how, here are some suggest
 
 9. **[Sponsor the project](https://github.com/sponsors/johannesjo)**
 
+### AOS repository checks
+
+The root [`aos-workflow.toml`](aos-workflow.toml) preserves this repository's existing
+production AOS registry command. It installs dependencies with the low-concurrency
+OpenShell fallback, prepares the environment and shared packages, then runs
+`npm run test:tools`. This is not the full Angular or E2E suite; normal contribution
+checks still apply. The legacy registry value is retained as migration data.
+
 :hearts: :hearts::hearts: :hearts::hearts: :hearts::hearts: :hearts::hearts: :hearts::hearts:
