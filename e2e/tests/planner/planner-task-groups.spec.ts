@@ -3,6 +3,7 @@ import { expect, test } from '../../fixtures/test.fixture';
 import { PlannerPage } from '../../pages/planner.page';
 
 const UNGROUPED_LIST = '.normal-tasks-items';
+const SECOND_LIST = '.second-list-items';
 const TASK_GROUP = '.task-group';
 const NEW_GROUP_DROP_ZONE = '.new-task-group-drop-zone';
 const SCHEDULE_DIALOG = 'dialog-schedule-task';
@@ -455,5 +456,66 @@ test.describe('Planner task groups', () => {
       groupBefore,
     );
     await expect(today.locator(`${UNGROUPED_LIST} planner-task`)).toHaveCount(1);
+  });
+
+  const dragIntoSecondList = (page: Page, title: string): Promise<void> =>
+    dragTo(page, taskInToday(title), () => centerOf(today.locator(SECOND_LIST)));
+
+  test('a task dropped below the list joins the second framed list', async ({ page }) => {
+    await dragIntoSecondList(page, 'Gamma');
+
+    await expect(today.locator(`${SECOND_LIST} planner-task`)).toHaveText([/Gamma/]);
+    await expect(today.locator(SECOND_LIST)).toHaveClass(/normal-tasks-items--framed/);
+    await expect(today.locator(SECOND_LIST)).toHaveCSS('border-left-width', '1px');
+    await expect(today.locator(`${UNGROUPED_LIST} planner-task`)).toHaveCount(2);
+    await expect(today.locator(TASK_GROUP)).toHaveCount(0);
+    await expect(page.locator(SCHEDULE_DIALOG)).toHaveCount(0);
+
+    await dragIntoUngroupedList(page, 'Gamma');
+    await expect(today.locator(`${SECOND_LIST} planner-task`)).toHaveCount(0);
+    await expect(today.locator(SECOND_LIST)).not.toHaveClass(
+      /normal-tasks-items--framed/,
+    );
+    await expect(today.locator(`${UNGROUPED_LIST} planner-task`)).toHaveCount(3);
+  });
+
+  test('both framed lists carry over to the next day while a group stays overdue', async ({
+    page,
+  }) => {
+    await page.clock.install();
+    await page.reload();
+    await new PlannerPage(page).navigateToPlanner();
+    today = page.locator('planner-day').first();
+    await startGroupWith(page, 'Gamma');
+    await dragIntoSecondList(page, 'Beta');
+    await expect(today.locator(`${TASK_GROUP} planner-task`)).toHaveText([/Gamma/]);
+    await expect(today.locator(`${SECOND_LIST} planner-task`)).toHaveText([/Beta/]);
+    await expect(today.locator(`${UNGROUPED_LIST} planner-task`)).toHaveText([/Alpha/]);
+
+    // give the operation log time to persist before moving to the next day
+    await page.waitForTimeout(1000);
+    await page.clock.setSystemTime(Date.now() + ONE_DAY_MS);
+    await page.reload();
+    await new PlannerPage(page).navigateToPlanner();
+    today = page.locator('planner-day').first();
+
+    const overdue = page.locator('planner-day-overdue');
+    // the carry-over runs a second after start-up
+    await expect(today.locator(`${UNGROUPED_LIST} planner-task`)).toHaveText([/Alpha/], {
+      timeout: 15000,
+    });
+    await expect(today.locator(`${SECOND_LIST} planner-task`)).toHaveText([/Beta/]);
+    await expect(today.locator(TASK_GROUP)).toHaveCount(0);
+    await expect(overdue.locator(`${TASK_GROUP} planner-task`)).toHaveText([/Gamma/]);
+    await expect(overdue.locator(`${UNGROUPED_LIST} planner-task`)).toHaveCount(0);
+
+    await page.reload();
+    await new PlannerPage(page).navigateToPlanner();
+    today = page.locator('planner-day').first();
+    await expect(today.locator(`${UNGROUPED_LIST} planner-task`)).toHaveText([/Alpha/]);
+    await expect(today.locator(`${SECOND_LIST} planner-task`)).toHaveText([/Beta/]);
+    await expect(
+      page.locator(`planner-day-overdue ${TASK_GROUP} planner-task`),
+    ).toHaveText([/Gamma/]);
   });
 });

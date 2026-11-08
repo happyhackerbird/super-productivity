@@ -20,8 +20,10 @@ export interface PlannerDay {
   timeLimit: number;
   itemsTotal: number;
   tasks: TaskCopy[];
-  // `tasks` split for the plan view; groups are never empty
+  // `tasks` split for the plan view; groups are never empty. The plain list and
+  // the second list are the two framed lists that carry over to today.
   ungroupedTasks?: TaskCopy[];
+  secondListTasks?: TaskCopy[];
   taskGroups?: PlannerTaskGroup[];
   deadlineTasks: TaskCopy[];
   noStartTimeRepeatProjections: NoStartTimeRepeatProjection[];

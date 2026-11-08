@@ -7,6 +7,7 @@ import { WorkContextType } from '../../work-context/work-context.model';
 import { TODAY_TAG } from '../../tag/tag.const';
 import {
   buildPlannerGroupValue,
+  buildPlannerListValue,
   createPlannerGroupId,
 } from '../store/planner-task-groups.util';
 import { PlannerTaskGroup } from '../planner.model';
@@ -16,7 +17,7 @@ export interface GroupDropParams {
   prevDay: string;
   newDay: string;
   today: string;
-  // null for the ungrouped list
+  // null for the plain list, PLANNER_SECOND_LIST_GROUP for the second list
   targetGroupId: string | null;
   // ids shown in the list the task was dropped into
   targetTaskIds: string[];
@@ -114,9 +115,7 @@ export const planGroupDrop = ({
     }
   }
 
-  const targetValue = targetGroupId
-    ? buildPlannerGroupValue(newDay, targetGroupId)
-    : null;
+  const targetValue = buildPlannerListValue(newDay, targetGroupId);
   if (targetValue !== (task.plannerGroup ?? null)) {
     actions.push(
       TaskSharedActions.updateTask({

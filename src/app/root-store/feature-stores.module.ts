@@ -89,6 +89,7 @@ import { timeTrackingFeature } from '../features/time-tracking/store/time-tracki
 import { ArchiveOperationHandlerEffects } from '../op-log/apply/archive-operation-handler.effects';
 import { plannerFeature } from '../features/planner/store/planner.reducer';
 import { PlannerEffects } from '../features/planner/store/planner.effects';
+import { PlannerCarryOverEffects } from '../features/planner/store/planner-carry-over.effects';
 import { AppStateEffects } from './app-state/app-state.effects';
 import { appStateFeature } from './app-state/app-state.reducer';
 import { PluginHooksEffects } from '../plugins/plugin-hooks.effects';
@@ -172,7 +173,7 @@ import { ReducerFailureSnackEffects } from './meta/reducer-failure-snack.effects
     EffectsModule.forFeature([ArchiveOperationHandlerEffects]),
 
     StoreModule.forFeature(plannerFeature),
-    EffectsModule.forFeature([PlannerEffects]),
+    EffectsModule.forFeature([PlannerEffects, PlannerCarryOverEffects]),
 
     StoreModule.forFeature(PLUGIN_USER_DATA_FEATURE_NAME, pluginUserDataReducer),
     StoreModule.forFeature(PLUGIN_METADATA_FEATURE_NAME, pluginMetadataReducer),

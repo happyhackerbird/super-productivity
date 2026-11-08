@@ -23,6 +23,7 @@ import { TaskMultiSelectService } from '../../tasks/task-multi-select.service';
 import { isMultiEntityOperation } from '../../../op-log/util/get-op-entity-ids.util';
 import { PersistentActionMeta } from '../../../op-log/core/persistent-action.interface';
 import { Action } from '@ngrx/store';
+import { PLANNER_SECOND_LIST_GROUP } from '../store/planner-task-groups.util';
 
 describe('PlannerDayComponent', () => {
   const createComponent = (
@@ -232,6 +233,102 @@ describe('PlannerDayComponent', () => {
         }),
       );
     });
+
+    it('puts a task dropped into the second list into it', () => {
+      const plain = task('a');
+      const { component, dispatch } = createForDrop(true, {
+        ungroupedTasks: [plain, task('b')],
+        secondListTasks: [],
+      });
+      component.dropInSecondList(
+        [],
+        dropEv(plain, {
+          previousContainer: { data: DAY, element } as never,
+          currentIndex: 0,
+        }),
+      );
+
+      expect(dispatch).toHaveBeenCalledOnceWith(
+        TaskSharedActions.updateTask({
+          task: { id: 'a', changes: { plannerGroup: PLANNER_SECOND_LIST_GROUP } },
+        }),
+      );
+    });
+
+    it('clears the marker of a second list task dropped into the plain list', () => {
+      const second = task('c', { plannerGroup: PLANNER_SECOND_LIST_GROUP });
+      const { component, dispatch } = createForDrop(true, {
+        ungroupedTasks: [task('a'), task('b')],
+        secondListTasks: [second],
+      });
+      component.drop(
+        'TODO',
+        [task('a'), task('b')],
+        dropEv(second, {
+          previousContainer: { data: DAY, element } as never,
+          currentIndex: 2,
+        }),
+      );
+
+      expect(dispatch).toHaveBeenCalledOnceWith(
+        TaskSharedActions.updateTask({
+          task: { id: 'c', changes: { plannerGroup: null } },
+        }),
+      );
+    });
+
+    it('adds a whole group dropped onto the second list to it', fakeAsync(() => {
+      const OTHER_DAY = '2026-05-12';
+      const members = ['m1', 'm2'].map((id) =>
+        task(id, { plannerGroup: `${OTHER_DAY}:g1` }),
+      );
+      const { component, dispatch } = createForDrop(true, {
+        ungroupedTasks: [task('a')],
+        secondListTasks: [task('s1', { plannerGroup: PLANNER_SECOND_LIST_GROUP })],
+        taskGroups: [],
+      });
+      const groupEl = document.createElement('div');
+      groupEl.classList.add('task-group');
+      const source = {
+        data: OTHER_DAY,
+        element: { nativeElement: groupEl },
+        getSortedItems: () => members.map((data) => ({ data })),
+      };
+      const secondListEl = document.createElement('div');
+      secondListEl.classList.add('second-list-items', 'normal-tasks-items--framed');
+      TestBed.inject(TaskMultiSelectService).togglePlannerGroup(
+        members.map((m) => m.id),
+        'm1',
+        document.createElement('div'),
+      );
+
+      component.dropInSecondList(
+        [],
+        dropEv(members[0], {
+          previousContainer: source as never,
+          container: { data: DAY, element: { nativeElement: secondListEl } } as never,
+        }),
+      );
+      tick();
+
+      const actions = dispatch.calls.allArgs().map(([a]) => a as Action);
+      expect(actions).toEqual([
+        ...members.map((m, index) =>
+          PlannerActions.transferTask({
+            task: m,
+            prevDay: OTHER_DAY,
+            newDay: DAY,
+            targetIndex: 3 + index,
+            today: '2026-05-10',
+          }),
+        ),
+        ...members.map((m) =>
+          TaskSharedActions.updateTask({
+            task: { id: m.id, changes: { plannerGroup: PLANNER_SECOND_LIST_GROUP } },
+          }),
+        ),
+      ]);
+    }));
 
     it('does not plan group drops when task groups are not enabled', () => {
       const grouped = task('c', { plannerGroup: `${DAY}:g1` });

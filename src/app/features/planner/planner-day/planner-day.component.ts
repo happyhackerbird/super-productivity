@@ -43,7 +43,11 @@ import { safeFormatDate } from '../../../util/safe-format-date';
 import { selectPlannerState } from '../store/planner.selectors';
 import { selectTodayTaskIds } from '../../work-context/store/work-context.selectors';
 import { selectTodayTagTaskIds } from '../../tag/store/tag.reducer';
-import { createPlannerGroupId } from '../store/planner-task-groups.util';
+import {
+  createPlannerGroupId,
+  isPlannerSecondListTask,
+  PLANNER_SECOND_LIST_GROUP,
+} from '../store/planner-task-groups.util';
 import {
   planGroupDrop,
   planWholeGroupMove,
@@ -217,6 +221,16 @@ export class PlannerDayComponent {
     this._dropInTaskList(groupId, groupTasks, ev);
   }
 
+  dropInSecondList(
+    secondListTasks: TaskCopy[],
+    ev: CdkDragDrop<string, string, TaskCopy>,
+  ): void {
+    if (this._dropSelectedGroupOnDay(ev)) {
+      return;
+    }
+    this._dropInTaskList(PLANNER_SECOND_LIST_GROUP, secondListTasks, ev);
+  }
+
   dropInNewGroup(ev: CdkDragDrop<string, string, TaskCopy>): void {
     // CDK keeps the last entered list as the drop target after the pointer
     // leaves it. Its overlap flag can also be stale after the placeholder moves
@@ -233,8 +247,9 @@ export class PlannerDayComponent {
 
   private _dropSelectedGroupOnDay(ev: CdkDragDrop<string, string, TaskCopy>): boolean {
     const source = ev.previousContainer.element.nativeElement;
-    const isFirstGroup = source.classList.contains('normal-tasks-items--framed');
-    if (!source.classList.contains('task-group') && !isFirstGroup) {
+    // Both framed lists (the plain list and the second list) are groups too.
+    const isFramedList = source.classList.contains('normal-tasks-items--framed');
+    if (!source.classList.contains('task-group') && !isFramedList) {
       return false;
     }
     const sourceTasks = ev.previousContainer
@@ -248,7 +263,7 @@ export class PlannerDayComponent {
       !sourceTasks.every(
         (task) =>
           (modifierDrag || selected.has(task.id)) &&
-          (isFirstGroup || task.plannerGroup === ev.item.data.plannerGroup),
+          (isFramedList || task.plannerGroup === ev.item.data.plannerGroup),
       )
     ) {
       return false;
@@ -259,19 +274,29 @@ export class PlannerDayComponent {
     }
     const prevDay = ev.previousContainer.data;
     const newDay = ev.container.data;
-    const groupChanges = planWholeGroupMove({
-      movedTasks: sourceTasks,
-      newDay,
-      ungroupedTasks: this.day.ungroupedTasks ?? this.day.tasks,
-      taskGroups: this.day.taskGroups ?? [],
-      insertAt: this._wholeGroupInsertPosition(ev),
-    });
+    // Dropped onto the second list, a whole group joins it; the second list is
+    // not part of the ordered [plain list, ...groups] that other drops place in.
+    const groupChanges = this._isSecondList(ev.container.element.nativeElement)
+      ? sourceTasks
+          .filter((task) => !isPlannerSecondListTask(task))
+          .map((task) => ({ id: task.id, plannerGroup: PLANNER_SECOND_LIST_GROUP }))
+      : planWholeGroupMove({
+          movedTasks: sourceTasks,
+          newDay,
+          ungroupedTasks: this.day.ungroupedTasks ?? this.day.tasks,
+          taskGroups: this.day.taskGroups ?? [],
+          insertAt: this._wholeGroupInsertPosition(ev),
+        });
     // Let CDK remove its drag placeholder before the source group disappears.
     setTimeout(
       () => this._moveSelectedGroup(sourceTasks, prevDay, newDay, groupChanges),
       0,
     );
     return true;
+  }
+
+  private _isSecondList(element: HTMLElement): boolean {
+    return element.classList.contains('second-list-items');
   }
 
   /**

@@ -152,7 +152,7 @@
   margin-top: calc(var(--s2) + var(--s4) + var(--s-half));
 }
 
-// The regular task list is the first group in Plan view.
+// The regular task list is the first framed list in Plan view.
 .normal-tasks-items--framed {
   --planner-group-c: #8b5cf6;
   padding: var(--s-half) var(--s-half) 0;
@@ -160,6 +160,19 @@
   border-radius: 12px;
   background: color-mix(in srgb, var(--planner-group-c) 7%, transparent);
   box-shadow: inset 3px 0 0 var(--planner-group-c);
+}
+
+// The second framed list sits right below the first one in its own color.
+// While empty it keeps its height as a drop target, like the new group zone,
+// and only shows through the global drop list outline during a drag.
+.second-list-items {
+  min-height: var(--planner-item-height);
+  flex-shrink: 0;
+  margin-top: var(--s2);
+
+  &.normal-tasks-items--framed {
+    --planner-group-c: #14b8a6;
+  }
 }
 
 // Keeps its size at all times so the drop area does not move when a drag
@@ -178,6 +191,7 @@
 // The item components draw their own box border, so their top/bottom edge
 // goes through --task-row-edge (separator when flat, box border when boxed).
 .normal-tasks-items > :not(.empty),
+.second-list-items > *,
 .task-group > *,
 .new-task-group-drop-zone > *,
 .deadline-items > :not(.empty) {

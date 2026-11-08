@@ -86,6 +86,24 @@ describe('Planner Selectors - task groups', () => {
     expect(day.itemsTotal).toBe(4);
   });
 
+  it('should split the second list from the plain list and the groups', () => {
+    const tasks = [
+      createMockTask({ id: 'a', plannerGroup: 'second-list' }),
+      createMockTask({ id: 'b' }),
+      createMockTask({ id: 'c', plannerGroup: `${tomorrow}:g1` }),
+      createMockTask({ id: 'd', plannerGroup: 'second-list' }),
+    ];
+    const day = getDay(tomorrow, tasks, {
+      days: { [tomorrow]: ['a', 'b', 'c', 'd'] },
+      addPlannedTasksDialogLastShown: undefined,
+    });
+
+    expect(ids(day.ungroupedTasks)).toEqual(['b']);
+    expect(ids(day.secondListTasks)).toEqual(['a', 'd']);
+    expect((day.taskGroups || []).map((g) => ids(g.tasks))).toEqual([['c']]);
+    expect(day.itemsTotal).toBe(4);
+  });
+
   it('should group tasks of today by the order of the today list', () => {
     const tasks = [
       createMockTask({ id: 'a', dueDay: today, plannerGroup: `${today}:g1` }),

@@ -106,6 +106,36 @@
     }
   </div>
 
+  <!-- The second framed list. Empty, it is a drop target outlined while dragging. -->
+  @if (isTaskGroupingEnabled()) {
+    @let secondListTasks = day.secondListTasks ?? [];
+    <div
+      class="second-list-items"
+      [class.normal-tasks-items--framed]="secondListTasks.length > 0"
+      cdkDropList
+      [cdkDropListData]="day.dayDate"
+      [cdkDropListAutoScrollStep]="8"
+      (cdkDropListDropped)="dropInSecondList(secondListTasks, $event)"
+    >
+      @for (task of secondListTasks; track task.id) {
+        <planner-task
+          #secondListTask
+          cdkDrag
+          (cdkDragStarted)="secondListTask.onPlannerGroupDragStarted()"
+          (cdkDragEnded)="secondListTask.onPlannerGroupDragEnded()"
+          [plannerGroupTasks]="secondListTasks"
+          [cdkDragData]="task"
+          [cdkDragStartDelay]="dragDelayForTouch()"
+          [cdkDragDisabled]="multiSelect.isTouchSelectionMode()"
+          [cdkDragLockAxis]="isXs() ? 'y' : ''"
+          [task]="task"
+          [day]="day.dayDate"
+          [focusable]="true"
+        ></planner-task>
+      }
+    </div>
+  }
+
   <add-task-inline [planForDay]="day.dayDate"></add-task-inline>
 
   @if (isTaskGroupingEnabled()) {

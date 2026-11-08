@@ -120,7 +120,7 @@ export class PlannerTaskComponent implements OnInit, OnDestroy, AfterViewInit {
   };
 
   readonly task = input.required<TaskCopy>();
-  // The first framed list is a group too, even without persisted group ids.
+  // The two framed lists are groups too, even without persisted group ids.
   readonly plannerGroupTasks = input<readonly TaskCopy[]>([]);
   private readonly _isModifierGroupDrag = signal(false);
   readonly isWholeGroupDrag = computed(() => {
@@ -703,9 +703,9 @@ export class PlannerTaskComponent implements OnInit, OnDestroy, AfterViewInit {
       return;
     }
     const scope = host.closest<HTMLElement>('[data-planner-selection-scope]');
-    // with task groups a task is only moved within its own list
-    const groupedList = scope?.querySelector('.task-group')
-      ? host.closest<HTMLElement>('.normal-tasks-items, .task-group')
+    // with task groups or a second list a task is only moved within its own list
+    const groupedList = scope?.querySelector('.task-group, .second-list-items > *')
+      ? host.closest<HTMLElement>('.normal-tasks-items, .second-list-items, .task-group')
       : null;
     const rows = groupedList
       ? Array.from(

@@ -7,6 +7,7 @@ import {
 import {
   createPlannerGroupId,
   partitionTasksByPlannerGroup,
+  PLANNER_SECOND_LIST_GROUP,
 } from '../store/planner-task-groups.util';
 import { PlannerActions } from '../store/planner.actions';
 import { TaskSharedActions } from '../../../root-store/meta/task-shared.actions';
@@ -282,6 +283,45 @@ describe('planGroupDrop()', () => {
         }),
       );
       expect(types(actions)).toEqual([PlannerActions.moveInList.type]);
+    });
+
+    it('should write the day-less marker for a drop into the second list', () => {
+      const actions = planGroupDrop(
+        params({
+          task: task('b'),
+          targetGroupId: PLANNER_SECOND_LIST_GROUP,
+          targetTaskIds: [],
+          dropIndex: 0,
+          dayTaskIds: RAW,
+        }),
+      );
+      expect(actions).toEqual([setGroup('b', PLANNER_SECOND_LIST_GROUP)]);
+    });
+
+    it('should keep the marker when reordering inside the second list', () => {
+      const actions = planGroupDrop(
+        params({
+          task: task('b', { plannerGroup: PLANNER_SECOND_LIST_GROUP }),
+          targetGroupId: PLANNER_SECOND_LIST_GROUP,
+          targetTaskIds: ['b', 'd'],
+          dropIndex: 1,
+          dayTaskIds: RAW,
+        }),
+      );
+      expect(types(actions)).toEqual([PlannerActions.moveInList.type]);
+    });
+
+    it('should clear the marker when a second list task is dropped into a group', () => {
+      const actions = planGroupDrop(
+        params({
+          task: task('b', { plannerGroup: PLANNER_SECOND_LIST_GROUP }),
+          targetGroupId: 'g1',
+          targetTaskIds: G1,
+          dropIndex: 3,
+          dayTaskIds: RAW,
+        }),
+      );
+      expect(actions[actions.length - 1]).toEqual(setGroup('b', `${D1}:g1`));
     });
 
     it('should skip the order when the target member is missing in the raw order', () => {

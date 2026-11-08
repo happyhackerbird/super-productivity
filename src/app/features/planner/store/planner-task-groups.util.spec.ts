@@ -1,9 +1,13 @@
 import {
   buildPlannerGroupValue,
+  buildPlannerListValue,
   createPlannerGroupId,
+  isPlannerFramedListTask,
+  isPlannerSecondListTask,
   parsePlannerGroupValue,
   partitionTasksByAnyPlannerGroup,
   partitionTasksByPlannerGroup,
+  PLANNER_SECOND_LIST_GROUP,
 } from './planner-task-groups.util';
 import { TaskCopy } from '../../tasks/task.model';
 
@@ -65,11 +69,63 @@ describe('planner-task-groups.util', () => {
     });
   });
 
+  describe('second list', () => {
+    it('should read the second list marker as no group', () => {
+      expect(parsePlannerGroupValue(PLANNER_SECOND_LIST_GROUP)).toBeNull();
+    });
+
+    it('should tell second list tasks apart from the others', () => {
+      expect(isPlannerSecondListTask(t('a', PLANNER_SECOND_LIST_GROUP))).toBe(true);
+      expect(isPlannerSecondListTask(t('b'))).toBe(false);
+      expect(isPlannerSecondListTask(t('c', '2026-09-30:g1'))).toBe(false);
+    });
+
+    it('should count the plain list and the second list as framed, groups not', () => {
+      expect(isPlannerFramedListTask(t('a'))).toBe(true);
+      expect(isPlannerFramedListTask(t('b', null))).toBe(true);
+      expect(isPlannerFramedListTask(t('c', PLANNER_SECOND_LIST_GROUP))).toBe(true);
+      expect(isPlannerFramedListTask(t('d', '2026-09-30:g1'))).toBe(false);
+    });
+
+    it('should build the value of each list', () => {
+      expect(buildPlannerListValue('2026-09-30', null)).toBeNull();
+      expect(buildPlannerListValue('2026-09-30', PLANNER_SECOND_LIST_GROUP)).toBe(
+        PLANNER_SECOND_LIST_GROUP,
+      );
+      expect(buildPlannerListValue('2026-09-30', 'g1')).toBe('2026-09-30:g1');
+    });
+  });
+
   describe('partitionTasksByPlannerGroup()', () => {
     it('should return all tasks as ungrouped when no task has a value', () => {
       const tasks = [t('a'), t('b', null)];
       const r = partitionTasksByPlannerGroup(tasks, '2026-09-30');
       expect(r.ungroupedTasks).toBe(tasks);
+      expect(r.secondListTasks).toEqual([]);
+      expect(r.taskGroups).toEqual([]);
+    });
+
+    it('should split the second list from the plain list and the groups', () => {
+      const tasks = [
+        t('a', PLANNER_SECOND_LIST_GROUP),
+        t('b'),
+        t('c', '2026-09-30:g1'),
+        t('d', PLANNER_SECOND_LIST_GROUP),
+        t('e'),
+      ];
+      const r = partitionTasksByPlannerGroup(tasks, '2026-09-30');
+      expect(r.ungroupedTasks.map((x) => x.id)).toEqual(['b', 'e']);
+      expect(r.secondListTasks.map((x) => x.id)).toEqual(['a', 'd']);
+      expect(r.taskGroups.map((g) => g.tasks.map((x) => x.id))).toEqual([['c']]);
+    });
+
+    it('should split the second list on a day without groups', () => {
+      const r = partitionTasksByPlannerGroup(
+        [t('a'), t('b', PLANNER_SECOND_LIST_GROUP)],
+        '2026-09-30',
+      );
+      expect(r.ungroupedTasks.map((x) => x.id)).toEqual(['a']);
+      expect(r.secondListTasks.map((x) => x.id)).toEqual(['b']);
       expect(r.taskGroups).toEqual([]);
     });
 
