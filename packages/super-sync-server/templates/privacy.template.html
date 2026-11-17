@@ -290,6 +290,13 @@
           end-to-end encrypted, so we cannot open your tasks.
         </li>
         <li>
+          <strong>Shared task list.</strong> If you turn on task reading, your app sends
+          us a list of your open tasks (titles, dates, and project and tag names, never
+          notes) after each sync. We store it unencrypted so that connected assistants can
+          read it, replace it with each new list, and delete it when you stop sharing,
+          switch the feature off or delete your account.
+        </li>
+        <li>
           <strong>Abuse limits.</strong> We count connection attempts per IP address (an
           IPv6 network counts as one) and, per connection, its requests and new tasks, and
           whether it was used in the last 24 hours. These counts exist only in the
@@ -302,15 +309,16 @@
           reading in the app; it cannot read your other data through the Service. We send
           its provider the access credentials for the connection and, per request,
           technical protocol data and a short confirmation or error message. These contain
-          no task content; an error message may repeat the name of a field the assistant
-          sent that we do not accept. We send them because you asked us to connect the
-          assistant (Art. 6(1)(b) GDPR). For users in the EU/EEA, the provider is usually
-          its EU company (for example Anthropic Ireland or OpenAI Ireland), so this is a
-          disclosure within the EU. For users outside the EU/EEA, the provider is usually
-          its US company (for example Anthropic PBC), with which you have your own
-          contract. No adequacy decision or standard contractual clauses between us and
-          the provider cover this; we send these data only because you connected that
-          assistant.
+          no task content, except the answers to the two task-reading requests, which
+          contain the titles, dates, and project and tag names of the list you share; an
+          error message may repeat the name of a field the assistant sent that we do not
+          accept. We send them because you asked us to connect the assistant (Art. 6(1)(b)
+          GDPR). For users in the EU/EEA, the provider is usually its EU company (for
+          example Anthropic Ireland or OpenAI Ireland), so this is a disclosure within the
+          EU. For users outside the EU/EEA, the provider is usually its US company (for
+          example Anthropic PBC), with which you have your own contract. No adequacy
+          decision or standard contractual clauses between us and the provider cover this;
+          we send these data only because you connected that assistant.
         </li>
         <li>
           The provider is a recipient of these data (Art. 4(9) GDPR). It receives what you
@@ -327,10 +335,11 @@
           already sent stay until imported or expired, unless you choose to delete them
           too. Signing out on all devices also removes every connection and keeps waiting
           tasks. Switching the feature off there removes every connection and deletes all
-          waiting tasks. Records of removed or expired connections are deleted within a
-          day. We keep only your public capture key, marked as switched off, so that an
-          outdated device cannot switch the feature back on without you; it is deleted
-          with your account (Section 8 (1)), as is all other data of this feature.
+          waiting tasks and the shared task list. Records of removed or expired
+          connections are deleted within a day. We keep only your public capture key,
+          marked as switched off, so that an outdated device cannot switch the feature
+          back on without you; it is deleted with your account (Section 8 (1)), as is all
+          other data of this feature.
         </li>
         <li>
           <strong>Counting.</strong> We may count, by a manual database query, connections
