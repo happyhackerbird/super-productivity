@@ -59,8 +59,8 @@ const projectionDays = (cfg: TaskRepeatCfg): string[] => {
 };
 
 describe('waitForCompletion repeat cfgs are not projected in the schedule', () => {
-  // Untimed cfgs are never projected into time slots (no auto-placement).
-  it('does not project a normal untimed daily cfg either', () => {
+  // untimed repeat projections are no longer placed automatically
+  it('projects a normal untimed daily cfg on the following days', () => {
     expect(projectionDays(dailyCfg())).toEqual([]);
   });
 

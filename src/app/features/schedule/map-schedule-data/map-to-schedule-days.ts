@@ -11,9 +11,6 @@ import {
 import { createScheduleDays } from './create-schedule-days';
 import { createBlockedBlocksByDayMap } from './create-blocked-blocks-by-day-map';
 
-// NOTE: untimed input (`tasks` without `dueWithTime`, `unScheduledTaskRepeatCfgs`,
-// `plannerDayMap`) is not placed into time slots anymore; only the timed items
-// that become blocker blocks are rendered (AO-134).
 export const mapToScheduleDays = (
   now: number,
   dayDates: string[],
@@ -89,5 +86,19 @@ export const mapToScheduleDays = (
     startOfNextDayDiffMs,
   );
 
-  return createScheduleDays(dayDates, blockerBlocksDayMap);
+  // No automatic placement: untimed tasks (Today list, planner days, dueDay
+  // only) and untimed repeat projections are not flowed into time slots.
+  // Only blocker blocks (timed tasks/projections, calendar, work/lunch) show.
+  const v = createScheduleDays(
+    [],
+    [],
+    dayDates,
+    {},
+    blockerBlocksDayMap,
+    workStartEndCfg,
+    now,
+    realNow,
+  );
+
+  return v;
 };

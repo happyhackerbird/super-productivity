@@ -50,14 +50,23 @@ const projectionDays = (cfg: TaskRepeatCfg, dayDates: string[]): (string | undef
     .filter((e) => e.type.startsWith('RepeatProjection'))
     .map((e) => e.plannedForDay);
 
-// Untimed repeat cfgs used to be flowed into day slots, and in month view also
-// onto the wrong grid cell. They are no longer auto-placed at all.
-describe('untimed repeat projections are not placed', () => {
-  it('does not project a monthly occurrence onto any month view grid cell', () => {
+describe('untimed repeat projections resolve to the day they are due', () => {
+  // createScheduleDays looked up "which cfgs are due" with `startTime`, which is
+  // `now` for day 0. That only equals day 0 while day 0 contains now -- true in
+  // week view, false in month view. The monthly occurrence therefore also
+  // rendered on grid cell 0, stamped plannedForDay of that cell, and the repeat
+  // dialog resolves targetDate from plannedForDay -- so "skip instance" wrote
+  // the grid cell's date into the synced deletedInstanceDates and left the real
+  // occurrence in place.
+  // Untimed repeat projections are no longer placed automatically at all.
+  it('does not project a monthly occurrence onto month view grid cell 0', () => {
     expect(projectionDays(repeatCfg(), MONTH_GRID)).toEqual([]);
   });
 
-  it('does not project a daily occurrence onto week view days', () => {
+  // Guards the fix against being "corrected" back: week view's day 0 IS now's
+  // day, and every other spec uses a midnight `now`, where the two anchors
+  // coincide and the difference is invisible.
+  it('still projects on week view day 0 when now is mid-day', () => {
     expect(
       projectionDays(repeatCfg({ id: 'R_DAILY', repeatCycle: 'DAILY' }), [
         '1970-01-01',

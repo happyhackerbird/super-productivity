@@ -93,7 +93,6 @@ describe('mapToScheduleDays()', () => {
     ).toEqual([]);
   });
 
-  // untimed Today tasks used to be flowed in from `now`; they get no slot now
   it('should work for simple case', () => {
     expect(
       mapToScheduleDays(
@@ -116,6 +115,7 @@ describe('mapToScheduleDays()', () => {
       {
         beyondBudgetTasks: [],
         dayDate: NDS,
+        // untimed tasks are not placed automatically
         entries: [],
         isToday: true,
       },
@@ -140,7 +140,7 @@ describe('mapToScheduleDays()', () => {
       undefined,
       undefined,
     );
-    // N1 used to be split around S1; untimed tasks are not placed anymore
+    // untimed N1 is not placed; only the timed S1 remains
     expect(r[0].entries.length).toBe(1);
     expect(r).toEqual([
       {
@@ -189,8 +189,8 @@ describe('mapToScheduleDays()', () => {
     expect(r[0].entries[0].start).toBe(dhTz(0, 9));
     expect(r[0].entries[0].duration).toBe(h(9));
 
-    // N1 used to be flowed onto the next day's work start
-    expect(r[1].entries).toEqual([]);
+    // untimed N1 is no longer flowed onto the next day
+    expect(r[1].entries.length).toBe(0);
   });
 
   it('should split multiple times', () => {
@@ -213,7 +213,7 @@ describe('mapToScheduleDays()', () => {
       undefined,
       undefined,
     );
-    // N1 used to be split around S1 and S2; untimed tasks are not placed anymore
+    // untimed N1 is no longer split around S1/S2
     expect(r[0].entries.length).toBe(2);
     expect(r).toEqual([
       {
@@ -247,7 +247,6 @@ describe('mapToScheduleDays()', () => {
       pending('Skipping timezone-dependent test');
       return;
     }
-    // N1 (untimed) is not placed; only the timed repeat projection is
     const r = mapToScheduleDays(
       N,
       [NDS, '1970-01-02'],
@@ -270,6 +269,7 @@ describe('mapToScheduleDays()', () => {
       {
         beyondBudgetTasks: [],
         dayDate: '1970-01-01',
+        // untimed N1 is not placed automatically
         entries: [],
         isToday: true,
       },
@@ -318,11 +318,11 @@ describe('mapToScheduleDays()', () => {
       undefined,
     );
 
-    // N1/N2 (untimed) used to flow around R1; only R1 keeps its slot now
     expect(r).toEqual([
       {
         beyondBudgetTasks: [],
         dayDate: '1970-01-01',
+        // untimed N1/N2 are not placed automatically
         entries: [],
         isToday: true,
       },
@@ -374,11 +374,11 @@ describe('mapToScheduleDays()', () => {
       undefined,
     );
 
-    // all input here is untimed, so nothing gets a slot
     expect(r).toEqual([
       {
         beyondBudgetTasks: [],
         dayDate: '1970-01-01',
+        // untimed tasks and the untimed repeat projection are not placed
         entries: [],
         isToday: true,
       },
@@ -418,10 +418,10 @@ describe('mapToScheduleDays()', () => {
       undefined,
     );
 
-    // N1 (untimed) used to be split across all three days around R1
     expect(r[0]).toEqual({
       beyondBudgetTasks: [],
       dayDate: '1970-01-01',
+      // untimed N1 is not placed automatically
       entries: [],
       isToday: true,
     } as any);
@@ -494,7 +494,7 @@ describe('mapToScheduleDays()', () => {
       undefined,
     );
 
-    // neither the Today task nor the planner-day tasks get a slot anymore
+    // neither the untimed N1 nor the planner tasks FD1-FD4 are placed
     expect(r).toEqual([
       { beyondBudgetTasks: [], dayDate: '1970-01-01', entries: [], isToday: true },
       { beyondBudgetTasks: [], dayDate: '1970-01-02', entries: [], isToday: false },
@@ -536,7 +536,7 @@ describe('mapToScheduleDays()', () => {
       },
     );
 
-    // R1 is untimed and used to be split around lunch; only lunch remains
+    // the untimed R1 is not projected; the lunch breaks keep their slots
     expect(r).toEqual([
       {
         beyondBudgetTasks: [],
@@ -618,8 +618,6 @@ describe('mapToScheduleDays()', () => {
       },
     );
 
-    // N1, the untimed R2 and the planner tasks FD1-FD4 used to be flowed in
-    // around the timed items; only the timed items and lunch keep a slot now
     expect(r[0]).toEqual({
       beyondBudgetTasks: [],
       dayDate: '1970-01-01',
@@ -942,9 +940,10 @@ describe('mapToScheduleDays()', () => {
   //     isToday: false,
   //   } as any);
   // });
-  it('should not place an untimed projection, not even as split segments', () => {
-    // a 26h untimed projection used to start on day 1, be pushed over midnight
-    // and split again by a scheduled task on day 2; it gets no slot anymore
+  it('should keep every segment of a flow projection pointing at its own occurrence day', () => {
+    // a 26h untimed projection starts on day 1, is pushed over midnight, and is
+    // then split again by a scheduled task on day 2 -> all four segments still
+    // belong to the day-1 occurrence
     const r = mapToScheduleDays(
       N,
       [NDS, '1970-01-02', '1970-01-03'],
@@ -973,7 +972,10 @@ describe('mapToScheduleDays()', () => {
       .flatMap((d) => d.entries)
       .filter((e) => e.type.startsWith('RepeatProjection'));
 
+    // the untimed R2 is no longer projected; the timed S2 keeps its slot
     expect(projectionSegments).toEqual([]);
-    expect(r[1].entries.map((e) => e.id)).toEqual(['S2']);
+    expect(r[1].entries.map((e) => [e.id, e.start, e.duration])).toEqual([
+      ['S2', new Date(1970, 0, 2, 1, 0, 0, 0).getTime(), h(0.5)],
+    ]);
   });
 });

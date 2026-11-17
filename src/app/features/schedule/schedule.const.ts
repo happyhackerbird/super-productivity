@@ -38,6 +38,20 @@ export const SCHEDULE_VIEW_TYPE_ORDER: {
   [SVEType.LunchBreak]: 14,
 };
 
+export const SCHEDULE_FLOW_TYPES: SVEType[] = [
+  SVEType.TaskPlannedForDay,
+
+  SVEType.Task,
+  SVEType.SplitTask,
+  SVEType.SplitTaskContinued,
+  SVEType.SplitTaskContinuedLast,
+
+  SVEType.RepeatProjection,
+  SVEType.RepeatProjectionSplit,
+  SVEType.RepeatProjectionSplitContinued,
+  SVEType.RepeatProjectionSplitContinuedLast,
+];
+
 // eslint-disable-next-line no-mixed-operators
 export const SCHEDULE_TASK_MIN_DURATION_IN_MS = 10 * 60 * 1000 + 1;
 
