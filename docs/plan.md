@@ -3,8 +3,8 @@
 ## Coordinator record
 
 Owner: the bus lease (coordinated repository, server route); this record is the durable state.
-Last mutation: 2026-11-17 16:13:40 UTC: `aos requeue AO-134 --ready` (unchanged brief, spec_hash 84ebf47d) per operator event 91 (Q3 answered).
-Next safe action: wait for AO-134 r2. If it fails again, name the cause before anything else and report to the operator. When it reaches review: step-6 checks (locked paths, removed specs, `aos integrate AO-134 --wait`), then one independent review task `--reviews AO-134` pinning the candidate SHA, asking it to re-run the schedule specs.
+Last mutation: 2026-11-17 ~17:00 UTC: review brief `tasks/02-review-AO-134.md` and `scripts/check_review.py` (skill template, verbatim) committed for record push; review task to be added and readied (event 93).
+Next safe action: wait for the review task. When it delivers: read reviews/review.md and target-check.txt on its branch, save `reviews/AO-134.md`, record push, then `aos integrate AO-134 --wait`, then `aos accept-request AO-134 --memo-file ...`. If the reviewer could not run Karma, R1-R5 are "not exercised" and the recommendation stays closed; report to the operator.
 
 ### Goal and authorization
 - Outcome (operator message, bus events 83 and 84, 2026-11-17): in the Schedule view nothing is
@@ -32,8 +32,10 @@ Next safe action: wait for AO-134 r2. If it fails again, name the cause before a
 | Task | Stage | Brief (path @ commit) | Depends on | Acceptance | Run | State | Candidate / result | Evidence |
 |---|---|---|---|---|---|---|---|---|
 | AO-134 | implementation (claude, server, headless; requires merge-check + review) | `tasks/01-schedule-no-auto-placement.md` @ 03b366cc | — | repo workflow `test_command` (empty `--accept`) | r1, r2 | r1 failed 2026-11-17 16:10:07: environment, the worker Claude account hit its session limit (run report: harness exit 1 after 16 s, "You've hit your session limit"); no work done. r2 requeued 16:13:40 after the operator moved the worker provider to another account (event 91) | — | bus events 89, 91 |
+| AO-134 | (cont.) r2 | | | | r2 | review 2026-11-17 16:53 (verdict pass on the workflow `test_command`); event 93 | `ao/AO-134` @ 04003d364f2ddbffcbbac0d909a522359eebd779, base 1435efa96c2d, one commit, 18 files under `src/app/features/schedule/` (+425/-2565; deletes the flow-placement path and its specs, adds `no-auto-placement.spec.ts`) | Coordinator step-6 (17:00): locked/config paths (tasks, scripts/check*, aos-*.toml, AGENTS.md, CLAUDE.md, package*, angular.json, karma, eslint, docs) untouched; removed exports have no remaining references in `src/`. Branch is not in the coordinator mirror; read from the GitHub fork. Worker report not readable from this turn (bus API call not permitted); the reviewer must judge independently anyway. Merge check not yet run (after the record push that follows the review). |
+| (next) | independent review (claude, server, headless; `--reviews AO-134`) | `tasks/02-review-AO-134.md` | AO-134 candidate 04003d36 | `python3 scripts/check_review.py --target 04003d36… --acceptance 1435efa9… --feature schedule-no-auto-placement` | — | to be added | — | Same model family as the build (claude): the only exercised review harness (methods.md); say so in the recommendation |
 
-Attempts used: 1 of 1 implementation (r2 in flight; r1 was an environment failure the operator ruled does not count, event 91) + 0 of 1 review. Repairs used: 0 of 1. Max 2 concurrent.
+Attempts used: 1 of 1 implementation (r2 delivered; r1 was an environment failure the operator ruled does not count, event 91) + 1 of 1 review (being commissioned). Repairs used: 0 of 1. Max 2 concurrent.
 
 Earlier tasks on the bus for this repo (before this record existed): AO-8 cancelled, AO-9 cancelled,
 AO-11 done (overdue-column drag into groups, single claude headless task, no proof pipeline).
