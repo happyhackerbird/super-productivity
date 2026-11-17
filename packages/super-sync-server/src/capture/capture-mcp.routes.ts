@@ -14,6 +14,7 @@ import {
 } from './capture-rate-limit';
 import { parseCaptureToken } from './capture-token';
 import { CREATE_TASK_TOOL, runCreateTask } from './create-task.tool';
+import { READ_TOOLS, runReadTool } from './capture-read.tools';
 import {
   handleMcpMessage,
   isAcceptedProtocolHeader,
@@ -24,9 +25,11 @@ import {
 } from './mcp-protocol';
 
 /**
- * `POST /mcp`: the hosted, write-only MCP endpoint. Accepts only capture
- * tokens; a sync JWT is not a capture token and fails here, and the sync
- * `authenticate` preHandler is never registered on this route.
+ * `POST /mcp`: the hosted MCP endpoint. It adds tasks, and reads the open-task
+ * list only while the account has task reading on (the read tools check that
+ * themselves). Accepts only capture tokens; a sync JWT is not a capture token
+ * and fails here, and the sync `authenticate` preHandler is never registered
+ * on this route.
  *
  * No Origin check: the endpoint is public and bearer-only, so a browser page
  * has no ambient credential to abuse, and DNS rebinding targets local servers.
@@ -49,9 +52,13 @@ const sendMcpReply = (reply: FastifyReply, result: McpHttpReply): FastifyReply =
 
 const contextFor = (grant: AuthenticatedGrant): McpServerContext => ({
   serverVersion: MCP_SERVER_VERSION,
-  listTools: () => [CREATE_TASK_TOOL],
-  hasTool: (name) => name === CREATE_TASK_TOOL.name,
-  callTool: (_name, args) => runCreateTask(grant, args),
+  listTools: () => [CREATE_TASK_TOOL, ...READ_TOOLS],
+  hasTool: (name) =>
+    name === CREATE_TASK_TOOL.name || READ_TOOLS.some((tool) => tool.name === name),
+  callTool: (name, args) =>
+    name === CREATE_TASK_TOOL.name
+      ? runCreateTask(grant, args)
+      : runReadTool(grant, name, args),
 });
 
 const handleMcpPost = async (

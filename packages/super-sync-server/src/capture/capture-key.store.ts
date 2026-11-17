@@ -52,7 +52,10 @@ export const registerCaptureKey = async (
   });
 };
 
-/** Feature off: marks the key disabled, drops pending items and revokes every grant. */
+/**
+ * Feature off: marks the key disabled, drops pending items, revokes every
+ * grant and deletes the task list shared for reading.
+ */
 export const disableCaptureKey = async (
   userId: number,
   now: number = Date.now(),
@@ -65,5 +68,6 @@ export const disableCaptureKey = async (
     await revokeAllCaptureGrants(tx, userId, now);
     const discarded = await tx.$executeRaw`
       DELETE FROM capture_items WHERE user_id = ${userId}`;
+    await tx.$executeRaw`DELETE FROM capture_read_models WHERE user_id = ${userId}`;
     return { discarded };
   });

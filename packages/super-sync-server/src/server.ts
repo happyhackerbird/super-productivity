@@ -34,7 +34,7 @@ import {
   resetWsConnectionService,
 } from './sync/services/websocket-connection.service';
 import { testRoutes } from './test-routes';
-import { captureMcpRoutes, captureRoutes } from './capture';
+import { captureMcpRoutes, captureReadRoutes, captureRoutes } from './capture';
 
 // HTML escape to prevent XSS in generated HTML
 export const escapeHtml = (unsafe: string): string => {
@@ -537,6 +537,7 @@ export const createServer = (
           );
         }
         await fastifyServer.register(captureRoutes, { prefix: '/api/capture' });
+        await fastifyServer.register(captureReadRoutes, { prefix: '/api/capture' });
       }
 
       // Test Routes (only in test mode)

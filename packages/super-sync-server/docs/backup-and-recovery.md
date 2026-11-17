@@ -129,6 +129,8 @@ gunzip -c backups/supersync_YYYYMMDD_HHMMSS.sql.gz | \
 #    their key again on the next sync; assistants need a new token.
 docker exec -i supersync-postgres psql -U supersync supersync \
   -c 'TRUNCATE capture_items, capture_grants, capture_keys, capture_auth, capture_connect_codes'
+# Shared task lists (fork): absent in dumps taken before the fork migration
+docker exec -i supersync-postgres psql -U supersync supersync -c "DO \$\$BEGIN IF to_regclass('public.capture_read_models') IS NOT NULL THEN TRUNCATE capture_read_models; END IF; END\$\$"
 
 # 4. Restart the server
 docker compose start supersync

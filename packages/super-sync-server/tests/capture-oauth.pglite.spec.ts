@@ -215,7 +215,7 @@ describe('capture OAuth (real routes and SQL)', () => {
     const listed = await request('tools/list', '2025-11-25');
     expect(listed.statusCode).toBe(200);
     expect(listed.json().result.tools.map((tool: { name: string }) => tool.name)).toEqual(
-      ['create_task'],
+      ['create_task', 'list_tasks', 'get_task'],
     );
   });
 

@@ -496,6 +496,14 @@ This remains a single-instance feature. Sign-out everywhere
 and switching capture off revoke grants and invalidate unconsumed codes in one
 transaction. Apply the Prisma migration before starting the updated server.
 
+Reading tasks (fork): a user can also switch on task reading in the app's
+AI assistants settings (`PUT /api/capture/read-access`, which needs capture
+on). Every connection of that account then answers `list_tasks` and `get_task`
+from a list of open tasks the app publishes on each sync (titles, dates,
+projects and tags, never notes) to `PUT /api/capture/read-model`. That list is
+stored in plaintext in `capture_read_models`, not end-to-end encrypted.
+Switching reading off, or switching capture off, deletes it.
+
 Connector directories (Claude, ChatGPT) review a connector days after
 submission, from their own infrastructure, so a 10-minute connection code from
 a running app cannot reach their reviewers. For that, set `CAPTURE_REVIEW_EMAIL`

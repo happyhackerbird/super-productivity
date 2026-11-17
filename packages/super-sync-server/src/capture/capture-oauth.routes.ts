@@ -78,7 +78,7 @@ const consentPage = (
 <p class="consent-subtitle">Send tasks straight to your Inbox.</p>
 <div class="consent-permissions">
 <strong>Allow this assistant to add tasks</strong>
-<p>It cannot read your existing tasks or sync data.</p>
+<p>It can read your open tasks only if you turn on task reading in Super Productivity. It cannot read notes or sync data.</p>
 <p class="consent-note">Your assistant and sync server see the task text you send.</p>
 </div>
 ${local ? '<p class="consent-note">This assistant runs on your computer. Continue only if you started this connection yourself.</p>' : ''}

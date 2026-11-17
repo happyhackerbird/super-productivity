@@ -146,6 +146,8 @@ describe('capture routes (PGlite)', () => {
     const list = await mcp(token, { jsonrpc: '2.0', id: 2, method: 'tools/list' });
     expect(list.json().result.tools.map((t: { name: string }) => t.name)).toEqual([
       'create_task',
+      'list_tasks',
+      'get_task',
     ]);
     // The connector directories require a title and every hint, explicitly.
     expect(list.json().result.tools[0]).toMatchObject({

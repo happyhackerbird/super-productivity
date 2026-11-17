@@ -42,6 +42,7 @@ model User {
   captureItems                CaptureItem[]
   captureConnectCode          CaptureConnectCode?
   captureAuthorizations       CaptureAuth[]
+  captureReadModel            CaptureReadModel?
   connectRequests             ConnectRequest[]
 
   @@index([verificationToken])
@@ -261,6 +262,22 @@ model CaptureAuth {
   @@index([userId])
   @@index([expiresAt])
   @@map("capture_auth")
+}
+
+/// Fork: the open-task list an account shares with its assistants, stored in
+/// plaintext while task reading is on. A row is one enablement; devices
+/// publish only against its `enableId`. Switching capture off deletes it.
+model CaptureReadModel {
+  userId      Int     @id @map("user_id")
+  enableId    String  @map("enable_id")
+  enabledAt   BigInt  @map("enabled_at")
+  /// JSON of the validated TaskReadModelV1; null until a device publishes.
+  payload     String?
+  publishedAt BigInt? @map("published_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("capture_read_models")
 }
 
 // Browser sign-in of a new device; see src/connect/connect-request.store.ts.

@@ -125,7 +125,9 @@
       </ul>
       <p class="note">
         Note: The Service accepts this data only end-to-end encrypted, so we cannot read
-        it. Older unencrypted data is described in Section 6 A.
+        it. The exception is a task list you choose to share with AI assistants, which is
+        stored unencrypted while sharing is on. Older unencrypted data is described in
+        Section 6 A.
       </p>
 
       <h3>(3) Meta and Log Data</h3>
@@ -296,13 +298,14 @@
         </li>
         <li>
           <strong>What the assistant's provider receives.</strong> A connected assistant
-          can only add tasks; it cannot read your data through the Service. We send its
-          provider the access credentials for the connection and, per request, technical
-          protocol data and a short confirmation or error message. These contain no task
-          content; an error message may repeat the name of a field the assistant sent that
-          we do not accept. We send them because you asked us to connect the assistant
-          (Art. 6(1)(b) GDPR). For users in the EU/EEA, the provider is usually its EU
-          company (for example Anthropic Ireland or OpenAI Ireland), so this is a
+          can add tasks. It can read a list of your open tasks only if you turn on task
+          reading in the app; it cannot read your other data through the Service. We send
+          its provider the access credentials for the connection and, per request,
+          technical protocol data and a short confirmation or error message. These contain
+          no task content; an error message may repeat the name of a field the assistant
+          sent that we do not accept. We send them because you asked us to connect the
+          assistant (Art. 6(1)(b) GDPR). For users in the EU/EEA, the provider is usually
+          its EU company (for example Anthropic Ireland or OpenAI Ireland), so this is a
           disclosure within the EU. For users outside the EU/EEA, the provider is usually
           its US company (for example Anthropic PBC), with which you have your own
           contract. No adequacy decision or standard contractual clauses between us and
