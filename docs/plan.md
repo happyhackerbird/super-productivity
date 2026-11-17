@@ -3,8 +3,8 @@
 ## Coordinator record
 
 Owner: the bus lease (coordinated repository, server route); this record is the durable state.
-Last mutation: 2026-11-18: events 118-120 closed. AO-134 merged to master by the executor (accept request 5, job 68, merge commit c7e4ab9d09, 2026-11-17 23:28 UTC; contains candidate 1f73dce3). AO-135 closed without merge (accept request 7). AO-136 close-only accept request 6 still pending with the operator.
-Next safe action: wait for the `accept-settled` event for request 6 (AO-136); then the goal is complete. Open follow-up: `npm run checkFile` on the AO-134 files was never run (the accept memo named it missing).
+Last mutation: 2026-11-18: events 121-122 closed. Job 69 (record push c7e4ab9d..f842b055) landed. AO-136 closed without merge (accept request 6, event 122). AO-134, AO-135 and AO-136 are all done; the goal is complete.
+Next safe action: none. Waiting for a new goal from the operator. Open follow-up (not authorized yet): `npm run checkFile` on the AO-134 files was never run (the accept memo named it as missing).
 
 ### Goal and authorization
 - Outcome (operator message, bus events 83 and 84, 2026-11-17): in the Schedule view nothing is
@@ -41,7 +41,7 @@ Next safe action: wait for the `accept-settled` event for request 6 (AO-136); th
 | AO-136 | re-review of AO-134-r3 (pi, openai-codex/gpt-6-astra per event 96; server, headless; `--reviews AO-134`) | `tasks/03-review-AO-134-r3.md` @ a8acc967 | AO-134 candidate 1f73dce3 | `python3 scripts/check_review.py --target 1f73dce3… --acceptance 5df3e19c… --feature schedule-no-auto-placement` | r1 | added and readied 2026-11-17 18:13 (event 106; re-review authorized in event 104). r1 failed 18:15:37 (event 109): ~2.5 min, stage cleanup, no commit, no report body; cause unknown (likely environment or capability: first pi / gpt-6-astra run on this worker). Q5 answered (event 111): environment, worker OpenAI login expired (401 after 27 s), renewed 18:44 UTC; not counted. r2 requeued ~18:47. r2 review 2026-11-17 ~19:05 (delivery check pass; event 115) | `ao/AO-136` @ 935e2f92e48236eeeb2870ec956b2ae5d66b9578: accept with follow-ups; R1-R5 met (source), R6 not exercised; 0 confirmed, 0 suspected; no runtime (npm ci stopped after 11 min, exit 143) | bus events 109, 111, 115; `reviews/AO-134.md` |
 | AO-135 | independent review (claude, server, headless; `--reviews AO-134`) | `tasks/02-review-AO-134.md` @ 326e06a1 | AO-134 candidate 04003d36 | `python3 scripts/check_review.py --target 04003d36… --acceptance 1435efa9… --feature schedule-no-auto-placement` | r1 | review 2026-11-17 17:28 (delivery check pass; event 100). Question AO-135-i1 answered 17:24 from brief item 2 (event 97) | `ao/AO-135` @ 7865c9bcda2fab0b889173bac9db6f806c3a293b: verdict accept with follow-ups; R1-R6 not exercised; 0 confirmed, 2 suspected low; summary in `reviews/AO-134.md` | Same model family as the build (claude): the only exercised review harness (methods.md); say so in the recommendation |
 
-Delivered: AO-134 merged (c7e4ab9d09, event 119); AO-135 closed without merge (event 118); AO-136 close-only request 6 pending.
+Delivered: AO-134 merged (c7e4ab9d09, event 119); AO-135 closed without merge (event 118); AO-136 closed without merge (request 6, event 122).
 
 Attempts used: 1 of 1 implementation (r2 delivered; r1 was an environment failure the operator ruled does not count, event 91) + 1 of 1 review (AO-135 r1 delivered). Repairs used: 1 of 1 (AO-134-r3, event 104). Re-review of r3 authorized by the operator (event 104): AO-136, in use. Max 2 concurrent.
 
