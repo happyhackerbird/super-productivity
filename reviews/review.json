@@ -1,0 +1,79 @@
+{
+  "target_sha": "04003d364f2ddbffcbbac0d909a522359eebd779",
+  "acceptance_revision": "1435efa96c2debc8e99305bead8d2e69ee259f30",
+  "feature": "schedule-no-auto-placement",
+  "verdict": "accept with follow-ups",
+  "requirements": {
+    "R1": {
+      "status": "not exercised",
+      "evidence": "Karma could not run (ng test killed during build, exit 137, sandbox memory cap; see target-check.txt). Per brief item 2 / operator-i90 not claimed. Source: untimed tasks are only used in the empty-input early return (map-to-schedule-days.ts:63); createScheduleDays renders only blockerBlocksDayMap[dayDate] (create-schedule-days.ts:19-22); currentId reorder removed. Met by reading."
+    },
+    "R2": {
+      "status": "not exercised",
+      "evidence": "Karma could not run (ng test killed during build, exit 137, sandbox memory cap; see target-check.txt). Per brief item 2 / operator-i90 not claimed. Source: plannerDayMap only used for the early return; dueDay/plannedForDay flow handling deleted with createScheduleDays' flow path. Met by reading."
+    },
+    "R3": {
+      "status": "not exercised",
+      "evidence": "Karma could not run (ng test killed during build, exit 137, sandbox memory cap; see target-check.txt). Per brief item 2 / operator-i90 not claimed. Source: unScheduledTaskRepeatCfgs only used for the early return; createViewEntriesForNonScheduledRepeatProjections deleted; timed cfgs still go via createBlockedBlocksByDayMap -> ScheduledRepeatProjection (unchanged). Met by reading."
+    },
+    "R4": {
+      "status": "not exercised",
+      "evidence": "Karma could not run (ng test killed during build, exit 137, sandbox memory cap; see target-check.txt). Per brief item 2 / operator-i90 not claimed. Source: blocker pipeline (create-sorted-blocker-blocks, create-blocked-blocks-by-day-map, create-view-entries-for-block) unchanged; base only moved isFlowableEntryVE entries, never timed ones; rewritten specs keep all timed expectations. Supplementary (not a spec pass): Node differential probe, 18 scenarios incl. midnight/multi-day/DST/start-of-next-day offset, timed entries identical base vs candidate."
+    },
+    "R5": {
+      "status": "not exercised",
+      "evidence": "Karma could not run (ng test killed during build, exit 137, sandbox memory cap; see target-check.txt). Per brief item 2 / operator-i90 not claimed. Source: beyondBudgetTasks: [] (create-schedule-days.ts:44); monthEvents concat of empty arrays (schedule.component.ts:328); schedule-day-page.ts:27,33 and schedule-week badge @if count > 0 (schedule-week.component.html:15) render nothing; isBeyondBudget never set. Component specs not run anywhere."
+    },
+    "R6": {
+      "status": "not exercised",
+      "evidence": "Karma could not run (ng test killed during build, exit 137, sandbox memory cap; see target-check.txt). Per brief item 2 / operator-i90 not claimed. Spec content reviewed: no-auto-placement.spec.ts has R1/R2/R3/R4/R5 cases; all removed/rewritten expectations encode untimed flow only (see review.md). Item 3 (new specs fail on base) not exercised under Karma; supplementary Node run: 7/8 new cases fail on base, the passing one is the timed-only R4 case."
+    }
+  },
+  "reviewer": "AO-135 (Claude Opus 5.5)",
+  "method": "ordinary",
+  "confirmed_findings": [],
+  "suspected_findings": [
+    {
+      "severity": "low",
+      "file": "src/app/features/schedule/map-schedule-data/create-schedule-days.ts",
+      "line": 25,
+      "summary": "Entries starting after day end are now dropped with Log.err for all types; base pushed SplitTaskContinuedLast/RepeatProjectionSplitContinuedLast to the next day. Not reachable in probes (incl. +4h start-of-next-day)."
+    },
+    {
+      "severity": "nit",
+      "file": "src/app/features/schedule/map-schedule-data/no-auto-placement.spec.ts",
+      "line": 61,
+      "summary": "UNTIMED_TYPES includes RepeatProjectionSplitContinuedLast, also the type of a timed repeat's after-midnight tail; helper would misfire on such a case. No mapToScheduleDays-level spec covers midnight-spanning timed items (base nor candidate)."
+    }
+  ],
+  "follow_ups": [
+    "Run src/app/features/schedule specs under Karma, and the new R1-R3 cases against base, on a host with enough memory before merge (mandatory for this verdict).",
+    "Dead inputs of mapToScheduleDays (tasks except early return, unScheduledTaskRepeatCfgs, currentId, plannerDayMap) and their computation in schedule.service.ts:107-121.",
+    "Now-unreachable beyond-budget plumbing/UI (beyondBudgetTasks, beyondBudgetDays, schedule-week badge, isBeyondBudget tooltip/SCSS, translation key), SVEEntryForNextDay and never-produced flow SVEType values.",
+    "Store screenshot/video scenarios will show fewer schedule events."
+  ],
+  "unexpected_changes": [],
+  "protected_inputs": {
+    "changed": [],
+    "compared": [
+      "tasks/",
+      "scripts/check*",
+      "AGENTS.md",
+      "CLAUDE.md",
+      "aos-*.toml",
+      "src/karma.conf.js",
+      "angular.json",
+      "tsconfig*.json",
+      "src/tsconfig*.json",
+      "src/test.ts"
+    ],
+    "result": "no change between base and candidate"
+  },
+  "test_loading": "Karma config, angular.json test target, tsconfig.spec.json and src/test.ts unchanged; new spec is a *.spec.ts under src/ and is picked up by default. Karma itself could not be run here (exit 137).",
+  "checkfile": "npm run checkFile passed on all 13 added/modified .ts files",
+  "limitations": [
+    "No Karma/ChromeHeadless run possible: ng test killed during build with exit 137 (sandbox memory cap), even for a single spec; no pass/fail/skip summary.",
+    "Full tsc -p src/tsconfig.spec.json also killed (137); targeted tsc over touched/consumer files: 0 errors in schedule, 23 pre-existing errors elsewhere identical to base.",
+    "Supplementary Node jasmine-core runs and differential probe (esbuild bundle, shims, TZ=Europe/Berlin) were made before the operator ruled out workarounds; recorded for transparency only, not used as status evidence; component specs could not load."
+  ]
+}

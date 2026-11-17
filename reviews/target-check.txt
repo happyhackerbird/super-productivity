@@ -1,0 +1,349 @@
+AO-135 target check — review of AO-134 (schedule-no-auto-placement)
+Checkout path: /tmp/target (git worktree)
+Assigned target revision:      04003d364f2ddbffcbbac0d909a522359eebd779
+Assigned acceptance revision:  1435efa96c2debc8e99305bead8d2e69ee259f30 (base / run start revision; brief tasks/01-schedule-no-auto-placement.md read from it)
+
+$ git worktree add /tmp/target 04003d364f2ddbffcbbac0d909a522359eebd779
+HEAD is now at 04003d364 feat(schedule): stop auto-placing untimed items in the schedule view
+$ git -C /tmp/target rev-parse HEAD
+04003d364f2ddbffcbbac0d909a522359eebd779
+$ git worktree add /tmp/base 1435efa96c2debc8e99305bead8d2e69ee259f30   (comparison checkout; node_modules symlinked from /tmp/target)
+$ git -C /tmp/base rev-parse HEAD
+1435efa96c2debc8e99305bead8d2e69ee259f30
+$ git log --oneline 1435efa96c2debc8e99305bead8d2e69ee259f30..04003d364f2ddbffcbbac0d909a522359eebd779
+04003d364 feat(schedule): stop auto-placing untimed items in the schedule view
+
+== Install (aos-workflow.toml test_command minus test:tools), in /tmp/target
+$ (ELECTRON_SKIP_BINARY_DOWNLOAD=1 npm ci --ignore-scripts --no-audit --no-fund --fetch-retries 5 --maxsockets 4 || ... --maxsockets 2) && npx ts-patch install && npm run env && npm run sync-core:build && npm run sync-providers:build && npm run shared-schema:build && npm run plugin-api:build
+(tail) ...
+
+EXIT 0
+
+== Diff scope
+$ git diff --name-status 1435efa96c2debc8e99305bead8d2e69ee259f30 04003d364f2ddbffcbbac0d909a522359eebd779
+M	src/app/features/schedule/map-schedule-data/create-schedule-days.spec.ts
+M	src/app/features/schedule/map-schedule-data/create-schedule-days.ts
+D	src/app/features/schedule/map-schedule-data/create-schedule-view-entries-for-normal-tasks.spec.ts
+D	src/app/features/schedule/map-schedule-data/create-schedule-view-entries-for-normal-tasks.ts
+M	src/app/features/schedule/map-schedule-data/create-view-entries-for-day.ts
+D	src/app/features/schedule/map-schedule-data/get-tasks-within-and-beyond-budget.ts
+D	src/app/features/schedule/map-schedule-data/insert-blocked-blocks-view-entries-for-schedule.spec.ts
+D	src/app/features/schedule/map-schedule-data/insert-blocked-blocks-view-entries-for-schedule.ts
+M	src/app/features/schedule/map-schedule-data/invalid-schedule-cfg-clock-string.spec.ts
+M	src/app/features/schedule/map-schedule-data/is-schedule-types-type.ts
+M	src/app/features/schedule/map-schedule-data/map-to-schedule-days-extended.spec.ts
+M	src/app/features/schedule/map-schedule-data/map-to-schedule-days.spec.ts
+M	src/app/features/schedule/map-schedule-data/map-to-schedule-days.ts
+M	src/app/features/schedule/map-schedule-data/month-view-repeat-projection-day.spec.ts
+A	src/app/features/schedule/map-schedule-data/no-auto-placement.spec.ts
+M	src/app/features/schedule/map-schedule-data/scheduled-repeat-projection-dedup.spec.ts
+M	src/app/features/schedule/map-schedule-data/wait-for-completion-repeat-projection.spec.ts
+M	src/app/features/schedule/schedule.const.ts
+$ git diff --stat 1435efa96c2debc8e99305bead8d2e69ee259f30 04003d364f2ddbffcbbac0d909a522359eebd779 -- . ':!src/app/features/schedule'
+(empty: no change outside src/app/features/schedule/)
+
+== Protected inputs
+$ git diff --stat 1435efa96c2debc8e99305bead8d2e69ee259f30 04003d364f2ddbffcbbac0d909a522359eebd779 -- tasks/ 'scripts/check*' AGENTS.md CLAUDE.md 'aos-*.toml' karma.conf.js src/karma.conf.js angular.json 'tsconfig*.json' 'src/tsconfig*.json' '**/tsconfig*.json' src/test.ts
+(empty: all unchanged)
+
+== Karma / ChromeHeadless (brief item 2) — CANNOT RUN IN THIS SANDBOX
+$ cd /tmp/target && CHROME_BIN=/usr/bin/chromium npm run test:file -- 'src/app/features/schedule/**/*.spec.ts'
+  -> exit 1; output ends after:
+     ❯ Building...
+     One or more browsers which are configured in the project's Browserslist configuration fall outside Angular's browser support for this version.
+     Unsupported browsers:
+     chrome 107
+$ CHROME_BIN=/usr/bin/chromium npx cross-env TZ='Europe/Berlin' ng test --watch=false --include src/app/features/schedule   -> exit 1, same output, no Karma summary
+$ CHROME_BIN=/usr/bin/chromium node --trace-uncaught node_modules/@angular/cli/bin/ng.js test --watch=false --include src/app/features/schedule/map-schedule-data/no-auto-placement.spec.ts
+     ❯ Building...
+     /bin/bash: line 1:  1335 Killed   timeout 900 node --trace-uncaught node_modules/@angular/cli/bin/ng.js test --watch=false --include src/app/features/schedule/map-schedule-data/no-auto-placement.spec.ts
+     EXIT 137
+     fatal error: all goroutines are asleep - deadlock!   (esbuild service, orphaned after the node process was killed)
+$ NODE_OPTIONS=--max-old-space-size=2560 node node_modules/@angular/cli/bin/ng.js test --watch=false --include .../no-auto-placement.spec.ts
+     Killed, EXIT 137; free -m during build: used 5256 MB, available 2685 MB at kill time (sandbox memory cap, not app heap)
+Result: no Karma pass/fail/skip summary obtainable. Per brief item 2 and operator answer operator-i90 (to AO-135-i1),
+every requirement whose evidence needs a spec run is marked 'not exercised'; item 3 (base runs) likewise.
+
+== npm run checkFile on every added/modified .ts (brief item 7)
+### npm run checkFile src/app/features/schedule/map-schedule-data/create-schedule-days.spec.ts
+
+🎨 Formatting create-schedule-days.spec.ts...
+🔍 Linting create-schedule-days.spec.ts...
+✅ create-schedule-days.spec.ts - All checks passed!
+exit=0
+### npm run checkFile src/app/features/schedule/map-schedule-data/create-schedule-days.ts
+
+🎨 Formatting create-schedule-days.ts...
+🔍 Linting create-schedule-days.ts...
+✅ create-schedule-days.ts - All checks passed!
+exit=0
+### npm run checkFile src/app/features/schedule/map-schedule-data/create-view-entries-for-day.ts
+
+🎨 Formatting create-view-entries-for-day.ts...
+🔍 Linting create-view-entries-for-day.ts...
+✅ create-view-entries-for-day.ts - All checks passed!
+exit=0
+### npm run checkFile src/app/features/schedule/map-schedule-data/invalid-schedule-cfg-clock-string.spec.ts
+
+🎨 Formatting invalid-schedule-cfg-clock-string.spec.ts...
+🔍 Linting invalid-schedule-cfg-clock-string.spec.ts...
+✅ invalid-schedule-cfg-clock-string.spec.ts - All checks passed!
+exit=0
+### npm run checkFile src/app/features/schedule/map-schedule-data/is-schedule-types-type.ts
+
+🎨 Formatting is-schedule-types-type.ts...
+🔍 Linting is-schedule-types-type.ts...
+✅ is-schedule-types-type.ts - All checks passed!
+exit=0
+### npm run checkFile src/app/features/schedule/map-schedule-data/map-to-schedule-days-extended.spec.ts
+
+🎨 Formatting map-to-schedule-days-extended.spec.ts...
+🔍 Linting map-to-schedule-days-extended.spec.ts...
+✅ map-to-schedule-days-extended.spec.ts - All checks passed!
+exit=0
+### npm run checkFile src/app/features/schedule/map-schedule-data/map-to-schedule-days.spec.ts
+
+🎨 Formatting map-to-schedule-days.spec.ts...
+🔍 Linting map-to-schedule-days.spec.ts...
+✅ map-to-schedule-days.spec.ts - All checks passed!
+exit=0
+### npm run checkFile src/app/features/schedule/map-schedule-data/map-to-schedule-days.ts
+
+🎨 Formatting map-to-schedule-days.ts...
+🔍 Linting map-to-schedule-days.ts...
+✅ map-to-schedule-days.ts - All checks passed!
+exit=0
+### npm run checkFile src/app/features/schedule/map-schedule-data/month-view-repeat-projection-day.spec.ts
+
+🎨 Formatting month-view-repeat-projection-day.spec.ts...
+🔍 Linting month-view-repeat-projection-day.spec.ts...
+✅ month-view-repeat-projection-day.spec.ts - All checks passed!
+exit=0
+### npm run checkFile src/app/features/schedule/map-schedule-data/no-auto-placement.spec.ts
+
+🎨 Formatting no-auto-placement.spec.ts...
+🔍 Linting no-auto-placement.spec.ts...
+✅ no-auto-placement.spec.ts - All checks passed!
+exit=0
+### npm run checkFile src/app/features/schedule/map-schedule-data/scheduled-repeat-projection-dedup.spec.ts
+
+🎨 Formatting scheduled-repeat-projection-dedup.spec.ts...
+🔍 Linting scheduled-repeat-projection-dedup.spec.ts...
+✅ scheduled-repeat-projection-dedup.spec.ts - All checks passed!
+exit=0
+### npm run checkFile src/app/features/schedule/map-schedule-data/wait-for-completion-repeat-projection.spec.ts
+
+🎨 Formatting wait-for-completion-repeat-projection.spec.ts...
+🔍 Linting wait-for-completion-repeat-projection.spec.ts...
+✅ wait-for-completion-repeat-projection.spec.ts - All checks passed!
+exit=0
+### npm run checkFile src/app/features/schedule/schedule.const.ts
+
+🎨 Formatting schedule.const.ts...
+🔍 Linting schedule.const.ts...
+✅ schedule.const.ts - All checks passed!
+exit=0
+
+== Static type-check (extra evidence, not a spec pass)
+$ NODE_OPTIONS=--max-old-space-size=2048 npx tsc -p src/tsconfig.spec.json --noEmit   -> exit 137 (killed, same memory cap)
+$ npx tsc -p /tmp/runner/tsconfig.review.json   (extends src/tsconfig.spec.json; files = 13 added/modified .ts + schedule.service.ts, schedule.component.ts, schedule-day-page.ts, map-schedule-days-to-schedule-events.ts, schedule-week.component.ts, window-ea.d.ts; plugins: [] because ts-patch plugins resolve relative to the tsconfig dir)
+  candidate: exit 2, 23 errors total, 0 in src/app/features/schedule
+  base (same set of files that exist there): 24 errors; diff base vs candidate error lines:
+     24d23
+     < src/app/util/env.ts(8,21): error TS2307: Cannot find module '../config/env.generated' or its corresponding type declarations.
+  -> the 23 shared errors are pre-existing/environmental (planner.service, task.service, project.service, ...), none in schedule.
+
+== SUPPLEMENTARY, NOT A SPEC PASS: Node jasmine-core runner (run before the operator ruled out workarounds; recorded for transparency only)
+Tool: /tmp/runner/run.sh (esbuild bundle of each spec + @angular/compiler, jasmine-core 'core' API in node, TZ=Europe/Berlin, window/confirm/addEventListener no-op shims). Not Karma, not Chrome; component specs cannot load (window.matchMedia).
+-- candidate, every spec under src/app/features/schedule/:
+### src/app/features/schedule/anchor-context-now.spec.ts
+SUMMARY: 5 specs, 5 passed, 0 failed, 0 skipped/pending (overall passed)
+### src/app/features/schedule/ical/exdate.spec.ts
+SUMMARY: 3 specs, 3 passed, 0 failed, 0 skipped/pending (overall passed)
+### src/app/features/schedule/ical/get-relevant-events-from-ical.spec.ts
+SUMMARY: 36 specs, 36 passed, 0 failed, 0 skipped/pending (overall passed)
+### src/app/features/schedule/ical/ical-lazy-loader.spec.ts
+SUMMARY: 3 specs, 3 passed, 0 failed, 0 skipped/pending (overall passed)
+### src/app/features/schedule/ical/is-likely-ical.spec.ts
+SUMMARY: 7 specs, 7 passed, 0 failed, 0 skipped/pending (overall passed)
+### src/app/features/schedule/map-schedule-data/create-blocked-blocks-by-day-map.spec.ts
+SUMMARY: 5 specs, 5 passed, 0 failed, 0 skipped/pending (overall passed)
+### src/app/features/schedule/map-schedule-data/create-schedule-days.spec.ts
+SUMMARY: 3 specs, 3 passed, 0 failed, 0 skipped/pending (overall passed)
+### src/app/features/schedule/map-schedule-data/create-sorted-blocker-blocks.spec.ts
+SUMMARY: 37 specs, 37 passed, 0 failed, 0 skipped/pending (overall passed)
+### src/app/features/schedule/map-schedule-data/create-view-entries-for-block.spec.ts
+SUMMARY: 3 specs, 3 passed, 0 failed, 0 skipped/pending (overall passed)
+### src/app/features/schedule/map-schedule-data/invalid-schedule-cfg-clock-string.spec.ts
+FAILED: Schedule: malformed schedule-config clock strings (#5358) createSortedBlockerBlocks emits no WorkdayStartEnd block for an unusable cfg rather than a bogus one
+FAILED: Schedule: malformed schedule-config clock strings (#5358) createSortedBlockerBlocks does not throw on a malformed workEnd
+FAILED: Schedule: malformed schedule-config clock strings (#5358) createSortedBlockerBlocks does not throw on an empty lunch break
+FAILED: Schedule: malformed schedule-config clock strings (#5358) createSortedBlockerBlocks does not throw on an empty workStart/workEnd
+SUMMARY: 8 specs, 4 passed, 4 failed, 0 skipped/pending (overall failed)
+### src/app/features/schedule/map-schedule-data/map-schedule-days-to-schedule-events.spec.ts
+SUMMARY: 9 specs, 9 passed, 0 failed, 0 skipped/pending (overall passed)
+### src/app/features/schedule/map-schedule-data/map-to-schedule-days-extended.spec.ts
+SUMMARY: 1 specs, 1 passed, 0 failed, 0 skipped/pending (overall passed)
+### src/app/features/schedule/map-schedule-data/map-to-schedule-days.spec.ts
+SUMMARY: 14 specs, 14 passed, 0 failed, 0 skipped/pending (overall passed)
+### src/app/features/schedule/map-schedule-data/month-view-repeat-projection-day.spec.ts
+SUMMARY: 4 specs, 4 passed, 0 failed, 0 skipped/pending (overall passed)
+### src/app/features/schedule/map-schedule-data/no-auto-placement.spec.ts
+SUMMARY: 8 specs, 8 passed, 0 failed, 0 skipped/pending (overall passed)
+### src/app/features/schedule/map-schedule-data/scheduled-repeat-projection-dedup.spec.ts
+SUMMARY: 5 specs, 5 passed, 0 failed, 0 skipped/pending (overall passed)
+### src/app/features/schedule/map-schedule-data/wait-for-completion-repeat-projection.spec.ts
+SUMMARY: 4 specs, 4 passed, 0 failed, 0 skipped/pending (overall passed)
+### src/app/features/schedule/schedule-day-page.spec.ts
+SUMMARY: 3 specs, 3 passed, 0 failed, 0 skipped/pending (overall passed)
+### src/app/features/schedule/schedule-event/schedule-event.component.spec.ts
+LOAD ERROR /tmp/out-target-x/schedule-event.component.spec.js: TypeError: window.matchMedia is not a function
+SUMMARY: 0 specs, 0 passed, 0 failed, 0 skipped/pending (overall incomplete)
+### src/app/features/schedule/schedule-month/schedule-month.component.spec.ts
+LOAD ERROR /tmp/out-target-x/schedule-month.component.spec.js: TypeError: window.matchMedia is not a function
+SUMMARY: 0 specs, 0 passed, 0 failed, 0 skipped/pending (overall incomplete)
+### src/app/features/schedule/schedule-week/format-schedule-drag-preview-label.util.spec.ts
+SUMMARY: 3 specs, 3 passed, 0 failed, 0 skipped/pending (overall passed)
+### src/app/features/schedule/schedule-week/schedule-week-drag.service.spec.ts
+LOAD ERROR /tmp/out-target-x/schedule-week-drag.service.spec.js: TypeError: window.matchMedia is not a function
+SUMMARY: 0 specs, 0 passed, 0 failed, 0 skipped/pending (overall incomplete)
+### src/app/features/schedule/schedule-week/schedule-week.component.spec.ts
+LOAD ERROR /tmp/out-target-x/schedule-week.component.spec.js: TypeError: window.matchMedia is not a function
+SUMMARY: 0 specs, 0 passed, 0 failed, 0 skipped/pending (overall incomplete)
+### src/app/features/schedule/schedule.service.spec.ts
+FAILED: ScheduleService – calendar visibility filter should drop entries whose items array becomes empty after filtering
+FAILED: ScheduleService – calendar visibility filter should filter hidden items inside a mixed-provider entry
+FAILED: ScheduleService – calendar visibility filter should exclude the entry for a hidden provider
+FAILED: ScheduleService – calendar visibility filter should exclude all entries when all providers are hidden
+FAILED: ScheduleService – calendar visibility filter should pass all entries through when no providers are hidden
+FAILED: ScheduleService getDayClass should ring the logical today between midnight and the start-of-next-day offset
+FAILED: ScheduleService getDaysToShow should return correct number of days when referenceDate is null
+FAILED: ScheduleService getDaysToShow should start on the logical today between midnight and the start-of-next-day offset
+FAILED: ScheduleService getDaysToShow should not mutate a provided reference date
+FAILED: ScheduleService getDaysToShow should keep the window consecutive across a spring-forward day
+### src/app/features/schedule/schedule/schedule-locale-ng0701.spec.ts
+LOAD ERROR /tmp/out-target-x/schedule-locale-ng0701.spec.js: TypeError: window.matchMedia is not a function
+SUMMARY: 0 specs, 0 passed, 0 failed, 0 skipped/pending (overall incomplete)
+### src/app/features/schedule/schedule/schedule.component.spec.ts
+LOAD ERROR /tmp/out-target-x/schedule.component.spec.js: TypeError: window.matchMedia is not a function
+SUMMARY: 0 specs, 0 passed, 0 failed, 0 skipped/pending (overall incomplete)
+-- base, same:
+### src/app/features/schedule/anchor-context-now.spec.ts
+SUMMARY: 5 specs, 5 passed, 0 failed, 0 skipped/pending (overall passed)
+### src/app/features/schedule/ical/exdate.spec.ts
+SUMMARY: 3 specs, 3 passed, 0 failed, 0 skipped/pending (overall passed)
+### src/app/features/schedule/ical/get-relevant-events-from-ical.spec.ts
+SUMMARY: 36 specs, 36 passed, 0 failed, 0 skipped/pending (overall passed)
+### src/app/features/schedule/ical/ical-lazy-loader.spec.ts
+SUMMARY: 3 specs, 3 passed, 0 failed, 0 skipped/pending (overall passed)
+### src/app/features/schedule/ical/is-likely-ical.spec.ts
+SUMMARY: 7 specs, 7 passed, 0 failed, 0 skipped/pending (overall passed)
+### src/app/features/schedule/map-schedule-data/create-blocked-blocks-by-day-map.spec.ts
+SUMMARY: 5 specs, 5 passed, 0 failed, 0 skipped/pending (overall passed)
+### src/app/features/schedule/map-schedule-data/create-schedule-days.spec.ts
+SUMMARY: 18 specs, 18 passed, 0 failed, 0 skipped/pending (overall passed)
+### src/app/features/schedule/map-schedule-data/create-schedule-view-entries-for-normal-tasks.spec.ts
+SUMMARY: 3 specs, 3 passed, 0 failed, 0 skipped/pending (overall passed)
+### src/app/features/schedule/map-schedule-data/create-sorted-blocker-blocks.spec.ts
+SUMMARY: 37 specs, 37 passed, 0 failed, 0 skipped/pending (overall passed)
+### src/app/features/schedule/map-schedule-data/create-view-entries-for-block.spec.ts
+SUMMARY: 3 specs, 3 passed, 0 failed, 0 skipped/pending (overall passed)
+### src/app/features/schedule/map-schedule-data/insert-blocked-blocks-view-entries-for-schedule.spec.ts
+SUMMARY: 6 specs, 6 passed, 0 failed, 0 skipped/pending (overall passed)
+### src/app/features/schedule/map-schedule-data/invalid-schedule-cfg-clock-string.spec.ts
+FAILED: Schedule: malformed schedule-config clock strings (#5358) createSortedBlockerBlocks emits no WorkdayStartEnd block for an unusable cfg rather than a bogus one
+FAILED: Schedule: malformed schedule-config clock strings (#5358) createSortedBlockerBlocks does not throw on an empty lunch break
+FAILED: Schedule: malformed schedule-config clock strings (#5358) createSortedBlockerBlocks does not throw on an empty workStart/workEnd
+FAILED: Schedule: malformed schedule-config clock strings (#5358) createSortedBlockerBlocks does not throw on a malformed workEnd
+SUMMARY: 8 specs, 4 passed, 4 failed, 0 skipped/pending (overall failed)
+### src/app/features/schedule/map-schedule-data/map-schedule-days-to-schedule-events.spec.ts
+SUMMARY: 9 specs, 9 passed, 0 failed, 0 skipped/pending (overall passed)
+### src/app/features/schedule/map-schedule-data/map-to-schedule-days-extended.spec.ts
+SUMMARY: 3 specs, 3 passed, 0 failed, 0 skipped/pending (overall passed)
+### src/app/features/schedule/map-schedule-data/map-to-schedule-days.spec.ts
+SUMMARY: 14 specs, 14 passed, 0 failed, 0 skipped/pending (overall passed)
+### src/app/features/schedule/map-schedule-data/month-view-repeat-projection-day.spec.ts
+SUMMARY: 4 specs, 4 passed, 0 failed, 0 skipped/pending (overall passed)
+### src/app/features/schedule/map-schedule-data/scheduled-repeat-projection-dedup.spec.ts
+SUMMARY: 5 specs, 5 passed, 0 failed, 0 skipped/pending (overall passed)
+### src/app/features/schedule/map-schedule-data/wait-for-completion-repeat-projection.spec.ts
+SUMMARY: 4 specs, 4 passed, 0 failed, 0 skipped/pending (overall passed)
+### src/app/features/schedule/schedule-day-page.spec.ts
+SUMMARY: 3 specs, 3 passed, 0 failed, 0 skipped/pending (overall passed)
+### src/app/features/schedule/schedule-event/schedule-event.component.spec.ts
+✘ [ERROR] Could not resolve "../config/env.generated"
+### src/app/features/schedule/schedule-month/schedule-month.component.spec.ts
+✘ [ERROR] Could not resolve "../config/env.generated"
+### src/app/features/schedule/schedule-week/format-schedule-drag-preview-label.util.spec.ts
+SUMMARY: 3 specs, 3 passed, 0 failed, 0 skipped/pending (overall passed)
+### src/app/features/schedule/schedule-week/schedule-week-drag.service.spec.ts
+✘ [ERROR] Could not resolve "../config/env.generated"
+### src/app/features/schedule/schedule-week/schedule-week.component.spec.ts
+✘ [ERROR] Could not resolve "../config/env.generated"
+### src/app/features/schedule/schedule.service.spec.ts
+✘ [ERROR] Could not resolve "../config/env.generated"
+### src/app/features/schedule/schedule/schedule-locale-ng0701.spec.ts
+✘ [ERROR] Could not resolve "../config/env.generated"
+### src/app/features/schedule/schedule/schedule.component.spec.ts
+✘ [ERROR] Could not resolve "../config/env.generated"
+(invalid-schedule-cfg-clock-string: the same 4 createSortedBlockerBlocks cases fail identically on base and candidate: 'ReferenceError: document is not defined' from devError -> native dialogs; runner artefact)
+-- candidate's rewritten/new specs run against BASE source (item 3 intent):
+### candidate no-auto-placement.spec.ts against BASE source
+FAILED: mapToScheduleDays() places nothing automatically does not project untimed repeat cfgs into time slots
+FAILED: mapToScheduleDays() places nothing automatically leaves beyondBudgetTasks empty even when untimed day tasks exceed the day
+FAILED: mapToScheduleDays() places nothing automatically timed items are not shifted or split by untimed items
+FAILED: mapToScheduleDays() places nothing automatically does not place untimed Today tasks into any time slot on any day
+FAILED: mapToScheduleDays() places nothing automatically does not place the current untimed task either
+FAILED: mapToScheduleDays() places nothing automatically does not place untimed tasks planned for a day in the planner
+FAILED: mapToScheduleDays() places nothing automatically does not place untimed tasks that only have a dueDay
+SUMMARY: 8 specs, 1 passed, 7 failed, 0 skipped/pending (overall failed)
+### candidate map-to-schedule-days.spec.ts against BASE source
+FAILED: mapToScheduleDays() should work for for tasks spanning multiple days
+FAILED: mapToScheduleDays() should sort in planned tasks to their days
+FAILED: mapToScheduleDays() should spit around scheduled repeat task cases
+FAILED: mapToScheduleDays() should work for NON-scheduled repeat task cases
+FAILED: mapToScheduleDays() should split multiple times
+FAILED: mapToScheduleDays() should show repeat for next day
+FAILED: mapToScheduleDays() should not place an untimed projection, not even as split segments
+FAILED: mapToScheduleDays() should calculate the right duration of repeat task projections
+FAILED: mapToScheduleDays() should work for an example with all the stuff
+FAILED: mapToScheduleDays() should work for very long scheduled tasks
+FAILED: mapToScheduleDays() should work for simple case
+FAILED: mapToScheduleDays() should work for simple scheduled case
+SUMMARY: 14 specs, 2 passed, 12 failed, 0 skipped/pending (overall failed)
+### candidate month-view-repeat-projection-day.spec.ts against BASE source
+FAILED: untimed repeat projections are not placed does not project a daily occurrence onto week view days
+FAILED: untimed repeat projections are not placed does not project a monthly occurrence onto any month view grid cell
+SUMMARY: 4 specs, 2 passed, 2 failed, 0 skipped/pending (overall failed)
+### candidate wait-for-completion-repeat-projection.spec.ts against BASE source
+FAILED: waitForCompletion repeat cfgs are not projected in the schedule does not project a normal untimed daily cfg either
+SUMMARY: 4 specs, 3 passed, 1 failed, 0 skipped/pending (overall failed)
+### candidate scheduled-repeat-projection-dedup.spec.ts against BASE source
+FAILED: scheduled repeat projection dedup (#7853) untimed (all-day) repeat projection dedup shows neither the untimed instance nor the projection
+SUMMARY: 5 specs, 4 passed, 1 failed, 0 skipped/pending (overall failed)
+### candidate map-to-schedule-days-extended.spec.ts against BASE source
+FAILED: mapToScheduleDays() should work for scheduled repeats that neighbor workStart workEnd blocks
+SUMMARY: 1 specs, 0 passed, 1 failed, 0 skipped/pending (overall failed)
+-- reviewer R4 differential probe (timed entries id/type/start/duration/day; base vs candidate):
+timedOnly/work+lunch/now=midnight             timed-entries-identical=True  base untimed=0 beyond=0 | cand untimed=0 beyond=0 | timed count=24
+withUntimed/work+lunch/now=midnight           timed-entries-identical=True  base untimed=10 beyond=2 | cand untimed=0 beyond=0 | timed count=24
+timedOnly/defaultWork/now=midnight            timed-entries-identical=True  base untimed=0 beyond=0 | cand untimed=0 beyond=0 | timed count=19
+withUntimed/defaultWork/now=midnight          timed-entries-identical=True  base untimed=13 beyond=2 | cand untimed=0 beyond=0 | timed count=19
+timedOnly/work+lunch/now=09:00                timed-entries-identical=True  base untimed=0 beyond=0 | cand untimed=0 beyond=0 | timed count=24
+withUntimed/work+lunch/now=09:00              timed-entries-identical=True  base untimed=10 beyond=2 | cand untimed=0 beyond=0 | timed count=24
+timedOnly/defaultWork/now=09:00               timed-entries-identical=True  base untimed=0 beyond=0 | cand untimed=0 beyond=0 | timed count=19
+withUntimed/defaultWork/now=09:00             timed-entries-identical=True  base untimed=13 beyond=2 | cand untimed=0 beyond=0 | timed count=19
+timedOnly/work+lunch/now=15:37                timed-entries-identical=True  base untimed=0 beyond=0 | cand untimed=0 beyond=0 | timed count=24
+withUntimed/work+lunch/now=15:37              timed-entries-identical=True  base untimed=11 beyond=2 | cand untimed=0 beyond=0 | timed count=24
+timedOnly/defaultWork/now=15:37               timed-entries-identical=True  base untimed=0 beyond=0 | cand untimed=0 beyond=0 | timed count=19
+withUntimed/defaultWork/now=15:37             timed-entries-identical=True  base untimed=16 beyond=2 | cand untimed=0 beyond=0 | timed count=19
+timedOnly/work+lunch/startOfNextDay=+4h/now=02:00 timed-entries-identical=True  base untimed=0 beyond=0 | cand untimed=0 beyond=0 | timed count=27
+withUntimed/work+lunch/startOfNextDay=+4h/now=02:00 timed-entries-identical=True  base untimed=10 beyond=2 | cand untimed=0 beyond=0 | timed count=27
+withUntimed/defaultWork/startOfNextDay=+4h/now=02:00 timed-entries-identical=True  base untimed=14 beyond=2 | cand untimed=0 beyond=0 | timed count=22
+timedOnly/work+lunch/startOfNextDay=+4h/now=09:00 timed-entries-identical=True  base untimed=0 beyond=0 | cand untimed=0 beyond=0 | timed count=24
+withUntimed/work+lunch/startOfNextDay=+4h/now=09:00 timed-entries-identical=True  base untimed=10 beyond=2 | cand untimed=0 beyond=0 | timed count=24
+withUntimed/defaultWork/startOfNextDay=+4h/now=09:00 timed-entries-identical=True  base untimed=13 beyond=2 | cand untimed=0 beyond=0 | timed count=19
+
+== Delivery check (run from repository root /sandbox/repo)
+$ python3 scripts/check_review.py --target 04003d364f2ddbffcbbac0d909a522359eebd779 --acceptance 1435efa96c2debc8e99305bead8d2e69ee259f30 --feature schedule-no-auto-placement
+review delivered for 04003d364f2ddbffcbbac0d909a522359eebd779; verdict: accept with follow-ups; 0 met, 0 not met, 6 not exercised
