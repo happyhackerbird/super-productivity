@@ -85,6 +85,7 @@ import { DataInitStateService } from './core/data-init/data-init-state.service';
 import { AppUriTaskActionsService } from './features/tasks/app-uri-actions/app-uri-task-actions.service';
 import { IosShareService } from './features/tasks/ios-share/ios-share.service';
 import { AgentCaptureService } from './features/tasks/agent-capture/agent-capture.service';
+import { TaskReadPublisherService } from './features/tasks/agent-read/task-read-publisher.service';
 import { ExampleTasksService } from './core/example-tasks/example-tasks.service';
 import { KeyboardLayoutService } from './core/keyboard-layout/keyboard-layout.service';
 import { setKeyboardLayoutService } from './util/check-key-combo';
@@ -185,6 +186,7 @@ export class AppComponent implements OnDestroy, AfterViewInit {
   private _appUriTaskActionsService = inject(AppUriTaskActionsService);
   private _iosShareService = inject(IosShareService);
   private _agentCaptureService = inject(AgentCaptureService);
+  private _taskReadPublisherService = inject(TaskReadPublisherService);
   readonly onboardingHintService = inject(OnboardingHintService);
   readonly quickTourService = inject(QuickTourService);
 
@@ -291,6 +293,7 @@ export class AppComponent implements OnDestroy, AfterViewInit {
     });
     this._iosShareService.start();
     this._agentCaptureService.start();
+    this._taskReadPublisherService.start();
     void this._materialIconsLoaderService.ensureFontReady();
 
     // Use effect to react to language RTL changes

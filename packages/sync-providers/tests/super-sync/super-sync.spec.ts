@@ -909,6 +909,101 @@ describe('SuperSyncProvider', () => {
 
       expect(await provider.getCaptureMcpUrl()).toBe('https://own.example/mcp');
     });
+
+    describe('captureApiRequest', () => {
+      it('sends a GET with the bearer token and returns the data', async () => {
+        const { provider, cfgStore, fetchMock } = buildProvider();
+        cfgStore.load.mockResolvedValue(testConfig);
+        const access = { enabled: false, enableId: null, publishedAt: null };
+        fetchMock.mockResolvedValueOnce(okResponse(access));
+
+        expect(
+          await provider.captureApiRequest('/api/capture/read-access', { method: 'GET' }),
+        ).toEqual({ ok: true, data: access });
+        const [url, options] = fetchMock.mock.calls[0] as [string, RequestInit];
+        expect(url).toBe('https://sync.example.com/api/capture/read-access');
+        expect(options.method).toBe('GET');
+        expect((options.headers as Headers).get('Authorization')).toBe(
+          'Bearer test-access-token',
+        );
+      });
+
+      it('sends the PUT body', async () => {
+        const { provider, cfgStore, fetchMock } = buildProvider();
+        cfgStore.load.mockResolvedValue(testConfig);
+        fetchMock.mockResolvedValueOnce(okResponse({ publishedAt: 5 }));
+
+        const body = JSON.stringify({ enableId: 'e1', model: { v: 1 } });
+        expect(
+          await provider.captureApiRequest('/api/capture/read-model', {
+            method: 'PUT',
+            body,
+          }),
+        ).toEqual({ ok: true, data: { publishedAt: 5 } });
+        expect(call(fetchMock)).toEqual({
+          url: 'https://sync.example.com/api/capture/read-model',
+          method: 'PUT',
+          body: { enableId: 'e1', model: { v: 1 } },
+        });
+      });
+
+      it.each([
+        '/api/sync/x',
+        '/api/capture/../sync/data',
+        '/api/capture/%2e%2e/sync/data',
+        '/api/capture//x',
+      ])('refuses %s without sending anything', async (path) => {
+        const { provider, cfgStore, fetchMock } = buildProvider();
+        cfgStore.load.mockResolvedValue(testConfig);
+
+        await expect(provider.captureApiRequest(path, { method: 'GET' })).rejects.toThrow(
+          'captureApiRequest: path must be under /api/capture/',
+        );
+        expect(fetchMock).not.toHaveBeenCalled();
+      });
+
+      it('returns a non-2xx status instead of throwing', async () => {
+        const { provider, cfgStore, fetchMock } = buildProvider();
+        cfgStore.load.mockResolvedValue(testConfig);
+        fetchMock.mockResolvedValueOnce(
+          errorResponse(409, 'Conflict', JSON.stringify({ error: 'read_disabled' })),
+        );
+
+        expect(
+          await provider.captureApiRequest('/api/capture/read-model', {
+            method: 'PUT',
+            body: '{}',
+          }),
+        ).toEqual({ ok: false, status: 409 });
+      });
+
+      it('lets auth failures propagate', async () => {
+        const { provider, cfgStore, fetchMock } = buildProvider();
+        cfgStore.load.mockResolvedValue(testConfig);
+        fetchMock.mockResolvedValueOnce(errorResponse(401, 'Unauthorized', ''));
+
+        await expect(
+          provider.captureApiRequest('/api/capture/read-access', { method: 'GET' }),
+        ).rejects.toBeInstanceOf(AuthFailSPError);
+      });
+
+      it('sends nothing when assertBeforeSend throws', async () => {
+        const { provider, cfgStore, fetchMock } = buildProvider();
+        cfgStore.load.mockResolvedValue(testConfig);
+        const fenced = new Error('fenced');
+
+        await expect(
+          provider.captureApiRequest('/api/capture/read-model', {
+            method: 'PUT',
+            body: '{}',
+            assertBeforeSend: () => {
+              throw fenced;
+            },
+          }),
+        ).rejects.toBe(fenced);
+        expect(fetchMock).not.toHaveBeenCalled();
+      });
+    });
   });
 
   describe('signOutAllOtherDevices', () => {

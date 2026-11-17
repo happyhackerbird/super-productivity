@@ -26,6 +26,7 @@ import { SnackService } from '../../../../core/snack/snack.service';
 import { T } from '../../../../t.const';
 import { DialogConfirmComponent } from '../../../../ui/dialog-confirm/dialog-confirm.component';
 import { LocaleDatePipe } from '../../../../ui/pipes/locale-date.pipe';
+import { AgentReadSettingsComponent } from '../../agent-read/agent-read-settings/agent-read-settings.component';
 import { AgentCaptureService } from '../agent-capture.service';
 
 /**
@@ -48,6 +49,7 @@ import { AgentCaptureService } from '../agent-capture.service';
     MatInput,
     TranslatePipe,
     LocaleDatePipe,
+    AgentReadSettingsComponent,
   ],
 })
 export class AgentCaptureSettingsComponent extends FieldType<FormlyFieldConfig> {

@@ -22,6 +22,9 @@
   <div class="capture-content">
     <p class="intro">{{ T.F.SYNC.FORM.SUPER_SYNC.CAPTURE_INFO | translate }}</p>
     <p class="intro">{{ T.F.SYNC.FORM.SUPER_SYNC.CAPTURE_SHARE_INFO | translate }}</p>
+    @if (isAvailable) {
+      <agent-read-settings [captureEnabled]="isEnabled()" />
+    }
     @if (!isAvailable) {
       <p class="hint">{{ T.F.SYNC.FORM.SUPER_SYNC.CAPTURE_SAVE_FIRST | translate }}</p>
     } @else if (!isEnabled()) {

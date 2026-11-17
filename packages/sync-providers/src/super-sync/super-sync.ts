@@ -82,6 +82,10 @@ class SuperSyncHttpStatusError extends Error {
   }
 }
 
+/** Plain lowercase segments under `/api/capture/`, for `captureApiRequest`. */
+const CAPTURE_API_PATH_REGEX =
+  /^\/api\/capture\/[a-z0-9]+(?:-[a-z0-9]+)*(?:\/[a-z0-9]+(?:-[a-z0-9]+)*)*$/;
+
 /** The server has no capture routes (404): the feature is off there. */
 export class SuperSyncCaptureUnsupportedError extends Error {
   override readonly name = 'SuperSyncCaptureUnsupportedError';
@@ -696,6 +700,40 @@ export class SuperSyncProvider
   /** The URL an assistant connects to: this server's MCP endpoint. */
   async getCaptureMcpUrl(): Promise<string> {
     return `${this._resolveBaseUrl(await this._cfgOrError())}/mcp`;
+  }
+
+  /**
+   * One authenticated request to a capture route, for app features that
+   * need no provider-side parsing. Only plain `/api/capture/...` paths pass:
+   * no dot segments, encoded characters or empty segments. A non-2xx status
+   * comes back as `{ ok: false, status }`; auth failures, network errors and
+   * a throw from `assertBeforeSend` (nothing is sent then) propagate.
+   */
+  async captureApiRequest<T>(
+    path: string,
+    options: {
+      method: 'GET' | 'PUT' | 'DELETE';
+      body?: string;
+      assertBeforeSend?: () => void;
+    },
+  ): Promise<{ ok: true; data: T } | { ok: false; status: number }> {
+    if (!CAPTURE_API_PATH_REGEX.test(path)) {
+      throw new Error('captureApiRequest: path must be under /api/capture/');
+    }
+    const cfg = await this._cfgOrError();
+    options.assertBeforeSend?.();
+    try {
+      const data = await this._fetchApi<T>(cfg, path, {
+        method: options.method,
+        body: options.body,
+      });
+      return { ok: true, data };
+    } catch (error) {
+      if (error instanceof SuperSyncHttpStatusError) {
+        return { ok: false, status: error.status };
+      }
+      throw error;
+    }
   }
 
   // === WebSocket Parameters ===

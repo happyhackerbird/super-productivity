@@ -1,0 +1,49 @@
+@let v = view();
+<p class="intro">{{ T.F.SYNC.FORM.SUPER_SYNC.CAPTURE_READ_INFO | translate }}</p>
+@if (v.line) {
+  <p
+    class="state"
+    [attr.e2e]="v.isOnLine ? 'agentReadState' : null"
+  >
+    {{ v.line | translate: { time: v.time | localeDate: 'shortDate' } }}
+  </p>
+}
+@if (v.hasOn || v.hasResume || v.hasStop) {
+  <div class="actions">
+    @if (v.hasOn) {
+      <button
+        mat-stroked-button
+        color="primary"
+        type="button"
+        e2e="agentReadOn"
+        [disabled]="isBusy()"
+        (click)="turnOn()"
+      >
+        {{ T.F.SYNC.FORM.SUPER_SYNC.CAPTURE_READ_BTN_ON | translate }}
+      </button>
+    }
+    @if (v.hasResume) {
+      <button
+        mat-stroked-button
+        type="button"
+        e2e="agentReadResume"
+        [disabled]="isBusy()"
+        (click)="turnOn()"
+      >
+        {{ T.F.SYNC.FORM.SUPER_SYNC.CAPTURE_READ_BTN_RESUME | translate }}
+      </button>
+    }
+    @if (v.hasStop) {
+      <button
+        mat-button
+        color="warn"
+        type="button"
+        e2e="agentReadOff"
+        [disabled]="isBusy()"
+        (click)="turnOff()"
+      >
+        {{ T.F.SYNC.FORM.SUPER_SYNC.CAPTURE_READ_BTN_OFF | translate }}
+      </button>
+    }
+  </div>
+}

@@ -264,6 +264,12 @@ export type SyncConfig = Readonly<{
    * what switching off writes, since an absent field does not travel.
    */
   captureKey?: CaptureKeyConfig | null;
+  /**
+   * Id of the read enablement this account switched on (SuperSync). Devices
+   * publish their task list only against this id. Absent or null: nothing is
+   * published. Synced on purpose; null is what switching off writes.
+   */
+  captureRead?: string | null;
 
   /* NOTE: view model for form only*/
   encryptKey?: string | null;

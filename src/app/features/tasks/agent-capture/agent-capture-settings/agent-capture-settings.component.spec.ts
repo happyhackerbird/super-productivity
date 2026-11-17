@@ -10,6 +10,7 @@ import { of } from 'rxjs';
 import { DateTimeFormatService } from '../../../../core/date-time-format/date-time-format.service';
 import { ShareService } from '../../../../core/share/share.service';
 import { SnackService } from '../../../../core/snack/snack.service';
+import { TaskReadPublisherService } from '../../agent-read/task-read-publisher.service';
 import { AgentCaptureService } from '../agent-capture.service';
 import { AgentCaptureSettingsComponent } from './agent-capture-settings.component';
 
@@ -75,6 +76,15 @@ describe('AgentCaptureSettingsComponent', () => {
       ],
       providers: [
         { provide: AgentCaptureService, useValue: capture },
+        // The embedded task-reading block: reading off on the server.
+        {
+          provide: TaskReadPublisherService,
+          useValue: {
+            enableId: signal(null),
+            getAccess: () =>
+              Promise.resolve({ enabled: false, enableId: null, publishedAt: null }),
+          },
+        },
         { provide: SnackService, useValue: snack },
         { provide: ShareService, useValue: {} },
         { provide: DateTimeFormatService, useValue: { currentLocale: () => 'en-gb' } },

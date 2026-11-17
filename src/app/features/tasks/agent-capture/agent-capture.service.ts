@@ -116,7 +116,12 @@ export class AgentCaptureService {
    */
   async switchOff(): Promise<void> {
     await this._superSyncOrError().disableCaptureKey();
-    this._globalConfig.updateSection('sync', { captureKey: null }, true);
+    // The server deleted the shared task list with the key: stop publishing too.
+    this._globalConfig.updateSection(
+      'sync',
+      { captureKey: null, captureRead: null },
+      true,
+    );
   }
 
   /** Settings act on the saved, active provider, not on a draft in the form. */
