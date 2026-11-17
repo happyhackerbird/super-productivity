@@ -1,5 +1,5 @@
 import { createSortedBlockerBlocks } from './create-sorted-blocker-blocks';
-import { createScheduleDays } from './create-schedule-days';
+import { mapToScheduleDays } from './map-to-schedule-days';
 import { BlockedBlockType } from '../schedule.model';
 import { getDbDateStr } from '../../../util/get-db-date-str';
 import { _resetDevErrorState } from '../../../util/dev-error';
@@ -125,11 +125,25 @@ describe('Schedule: malformed schedule-config clock strings (#5358)', () => {
     });
   });
 
-  describe('createScheduleDays', () => {
+  describe('mapToScheduleDays', () => {
     it('does not throw on an empty workStart', () => {
       const dayDates = [getDbDateStr(NOW)];
       expect(() =>
-        createScheduleDays([], [], dayDates, {}, {}, { startTime: '', endTime: '' }, NOW),
+        mapToScheduleDays(
+          NOW,
+          dayDates,
+          [],
+          [],
+          [],
+          [],
+          [],
+          null,
+          {},
+          {
+            startTime: '',
+            endTime: '',
+          },
+        ),
       ).not.toThrow();
     });
   });

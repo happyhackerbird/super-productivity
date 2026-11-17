@@ -165,10 +165,8 @@ describe('scheduled repeat projection dedup (#7853)', () => {
     });
   });
 
-  // The untimed projection path (create-schedule-days.ts) is structurally
-  // identical to the timed one and duplicates the same way when the anchor lags.
-  // It is not reachable via the reporter's flow (the Planner workaround keeps the
-  // anchor aligned), but the render-layer guard is symmetric defense-in-depth.
+  // Untimed instances and untimed projections are no longer auto-placed, so
+  // the lagging anchor cannot produce a duplicate here: the day stays empty.
   describe('untimed (all-day) repeat projection dedup', () => {
     const wed = new Date(2026, 5, 3, 0, 0, 0, 0).getTime();
     const futureStr = getDbDateStr(new Date(2026, 5, 6, 0, 0, 0, 0).getTime());
@@ -207,11 +205,8 @@ describe('scheduled repeat projection dedup (#7853)', () => {
       }));
     };
 
-    it('shows only the concrete instance, not the projection', () => {
-      const entries = futureEntries();
-      expect(entries.length).toBe(1);
-      expect(entries.some((e) => e.type === SVEType.RepeatProjection)).toBe(false);
-      expect(entries[0].id).toBe('U1');
+    it('shows neither the untimed instance nor the projection', () => {
+      expect(futureEntries()).toEqual([]);
     });
   });
 });

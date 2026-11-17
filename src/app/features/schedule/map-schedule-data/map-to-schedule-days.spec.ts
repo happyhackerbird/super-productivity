@@ -93,6 +93,7 @@ describe('mapToScheduleDays()', () => {
     ).toEqual([]);
   });
 
+  // untimed Today tasks used to be flowed in from `now`; they get no slot now
   it('should work for simple case', () => {
     expect(
       mapToScheduleDays(
@@ -115,32 +116,7 @@ describe('mapToScheduleDays()', () => {
       {
         beyondBudgetTasks: [],
         dayDate: NDS,
-        entries: [
-          {
-            data: {
-              ...FAKE_TASK,
-              id: '1',
-              timeEstimate: h(1),
-              timeSpent: 0,
-            },
-            id: '1',
-            start: hTz(0),
-            duration: h(1),
-            type: 'Task',
-          },
-          {
-            data: {
-              ...FAKE_TASK,
-              id: '2',
-              timeEstimate: h(2),
-              timeSpent: 0,
-            },
-            id: '2',
-            start: hTz(1),
-            duration: h(2),
-            type: 'Task',
-          },
-        ],
+        entries: [],
         isToday: true,
       },
       { beyondBudgetTasks: [], dayDate: '2020-1-2', entries: [], isToday: false },
@@ -164,25 +140,13 @@ describe('mapToScheduleDays()', () => {
       undefined,
       undefined,
     );
-    expect(r[0].entries.length).toBe(3);
+    // N1 used to be split around S1; untimed tasks are not placed anymore
+    expect(r[0].entries.length).toBe(1);
     expect(r).toEqual([
       {
         beyondBudgetTasks: [],
         dayDate: '1970-01-01',
         entries: [
-          {
-            data: {
-              id: 'N1',
-              subTaskIds: [],
-              tagIds: [],
-              timeEstimate: 3600000,
-              timeSpent: 0,
-            },
-            id: 'N1',
-            start: hTz(0),
-            duration: h(0.5),
-            type: 'SplitTask',
-          },
           {
             data: {
               id: 'S1',
@@ -197,19 +161,6 @@ describe('mapToScheduleDays()', () => {
             start: minAfterNowTs(30),
             duration: h(1),
             type: 'ScheduledTask',
-          },
-          {
-            data: {
-              id: 'N1',
-              subTaskIds: [],
-              tagIds: [],
-              timeEstimate: 3600000,
-              timeSpent: 0,
-            },
-            id: 'N1_1970-01-01_0',
-            start: minAfterNowTs(90),
-            duration: h(0.5),
-            type: 'SplitTaskContinuedLast',
           },
         ],
         isToday: true,
@@ -238,9 +189,8 @@ describe('mapToScheduleDays()', () => {
     expect(r[0].entries[0].start).toBe(dhTz(0, 9));
     expect(r[0].entries[0].duration).toBe(h(9));
 
-    expect(r[1].entries.length).toBe(1);
-    expect(r[1].entries[0].start).toBe(dhTz(1, 9));
-    expect(r[1].entries[0].duration).toBe(h(1));
+    // N1 used to be flowed onto the next day's work start
+    expect(r[1].entries).toEqual([]);
   });
 
   it('should split multiple times', () => {
@@ -263,19 +213,13 @@ describe('mapToScheduleDays()', () => {
       undefined,
       undefined,
     );
-    expect(r[0].entries.length).toBe(5);
+    // N1 used to be split around S1 and S2; untimed tasks are not placed anymore
+    expect(r[0].entries.length).toBe(2);
     expect(r).toEqual([
       {
         beyondBudgetTasks: [],
         dayDate: '1970-01-01',
         entries: [
-          {
-            data: jasmine.any(Object),
-            id: 'N1',
-            start: hTz(0),
-            duration: h(0.5),
-            type: 'SplitTask',
-          },
           {
             data: jasmine.any(Object),
             id: 'S1',
@@ -285,24 +229,10 @@ describe('mapToScheduleDays()', () => {
           },
           {
             data: jasmine.any(Object),
-            id: 'N1_1970-01-01_0',
-            start: minAfterNowTs(60),
-            duration: h(0.5),
-            type: 'SplitTaskContinued',
-          },
-          {
-            data: jasmine.any(Object),
             id: 'S2',
             start: minAfterNowTs(90),
             duration: h(0.5),
             type: 'ScheduledTask',
-          },
-          {
-            data: jasmine.any(Object),
-            id: 'N1_1970-01-01_1',
-            start: minAfterNowTs(120),
-            duration: h(1),
-            type: 'SplitTaskContinuedLast',
           },
         ],
         isToday: true,
@@ -317,6 +247,7 @@ describe('mapToScheduleDays()', () => {
       pending('Skipping timezone-dependent test');
       return;
     }
+    // N1 (untimed) is not placed; only the timed repeat projection is
     const r = mapToScheduleDays(
       N,
       [NDS, '1970-01-02'],
@@ -339,15 +270,7 @@ describe('mapToScheduleDays()', () => {
       {
         beyondBudgetTasks: [],
         dayDate: '1970-01-01',
-        entries: [
-          {
-            data: jasmine.any(Object),
-            id: 'N1',
-            start: hTz(0),
-            duration: h(2),
-            type: 'Task',
-          },
-        ],
+        entries: [],
         isToday: true,
       },
       {
@@ -395,35 +318,18 @@ describe('mapToScheduleDays()', () => {
       undefined,
     );
 
+    // N1/N2 (untimed) used to flow around R1; only R1 keeps its slot now
     expect(r).toEqual([
       {
         beyondBudgetTasks: [],
         dayDate: '1970-01-01',
-        entries: [
-          {
-            data: jasmine.any(Object),
-            id: 'N1',
-            // NOTE: the 24h stuff only works if we count from 0 of the current timezone
-            start: h(0),
-
-            duration: h(23) - 60000,
-            type: 'Task',
-          },
-        ],
+        entries: [],
         isToday: true,
       },
       {
         beyondBudgetTasks: [],
         dayDate: '1970-01-02',
         entries: [
-          {
-            data: jasmine.any(Object),
-            id: 'N2',
-
-            start: hTz(24),
-            duration: h(1),
-            type: 'SplitTask',
-          },
           {
             data: jasmine.any(Object),
             id: 'R1_1970-01-02',
@@ -433,14 +339,6 @@ describe('mapToScheduleDays()', () => {
             type: 'ScheduledRepeatProjection',
             plannedForDay: '1970-01-02',
             sourceOccurrenceDate: '1970-01-02',
-          },
-          {
-            data: jasmine.any(Object),
-            id: 'N2_1970-01-02_0',
-
-            start: hTz(26),
-            duration: h(1),
-            type: 'SplitTaskContinuedLast',
           },
         ],
         isToday: false,
@@ -476,44 +374,18 @@ describe('mapToScheduleDays()', () => {
       undefined,
     );
 
+    // all input here is untimed, so nothing gets a slot
     expect(r).toEqual([
       {
         beyondBudgetTasks: [],
         dayDate: '1970-01-01',
-        entries: [
-          {
-            data: jasmine.any(Object),
-            id: 'N1',
-            start: hTz(0),
-
-            duration: h(23) - 60000,
-            type: 'Task',
-          },
-        ],
+        entries: [],
         isToday: true,
       },
       {
         beyondBudgetTasks: [],
         dayDate: '1970-01-02',
-        entries: [
-          {
-            data: jasmine.any(Object),
-            id: 'R1_1970-01-02',
-
-            start: hTz(24),
-            duration: h(2),
-            type: 'RepeatProjection',
-            plannedForDay: '1970-01-02',
-          },
-          {
-            data: jasmine.any(Object),
-            id: 'N2',
-            // eslint-disable-next-line no-mixed-operators
-            start: 26 * H + TZ_OFFSET,
-            duration: h(1),
-            type: 'Task',
-          },
-        ],
+        entries: [],
         isToday: false,
       },
     ] as any);
@@ -546,19 +418,11 @@ describe('mapToScheduleDays()', () => {
       undefined,
     );
 
+    // N1 (untimed) used to be split across all three days around R1
     expect(r[0]).toEqual({
       beyondBudgetTasks: [],
       dayDate: '1970-01-01',
-      entries: [
-        {
-          data: jasmine.any(Object),
-          id: 'N1',
-          start: dhTz(0, 9),
-
-          duration: h(8),
-          type: 'SplitTask',
-        },
-      ],
+      entries: [],
       isToday: true,
     } as any);
 
@@ -574,13 +438,6 @@ describe('mapToScheduleDays()', () => {
           type: 'ScheduledRepeatProjection',
           plannedForDay: '1970-01-02',
           sourceOccurrenceDate: '1970-01-02',
-        },
-        {
-          data: jasmine.any(Object),
-          duration: h(6),
-          id: 'N1_1970-01-01_0',
-          start: dhTz(1, 11),
-          type: 'SplitTaskContinued',
         },
       ],
       isToday: false,
@@ -598,13 +455,6 @@ describe('mapToScheduleDays()', () => {
           type: 'ScheduledRepeatProjection',
           plannedForDay: '1970-01-03',
           sourceOccurrenceDate: '1970-01-03',
-        },
-        {
-          data: jasmine.any(Object),
-          duration: h(2),
-          id: 'N1_1970-01-02_1',
-          start: dhTz(2, 11),
-          type: 'SplitTaskContinuedLast',
         },
       ],
       isToday: false,
@@ -644,64 +494,12 @@ describe('mapToScheduleDays()', () => {
       undefined,
     );
 
+    // neither the Today task nor the planner-day tasks get a slot anymore
     expect(r).toEqual([
-      {
-        beyondBudgetTasks: [],
-        dayDate: '1970-01-01',
-        entries: [
-          {
-            data: jasmine.any(Object),
-            id: 'N1',
-            start: hTz(0),
-            duration: h(2),
-            type: 'Task',
-          },
-        ],
-        isToday: true,
-      },
-      {
-        beyondBudgetTasks: [],
-        dayDate: '1970-01-02',
-        entries: [
-          {
-            data: jasmine.any(Object),
-            id: 'FD1',
-            start: 82800000,
-            duration: h(1),
-            type: 'TaskPlannedForDay',
-          },
-          {
-            data: jasmine.any(Object),
-            id: 'FD2',
-            start: 86400000,
-            duration: h(2),
-            type: 'TaskPlannedForDay',
-          },
-        ],
-        isToday: false,
-      },
+      { beyondBudgetTasks: [], dayDate: '1970-01-01', entries: [], isToday: true },
+      { beyondBudgetTasks: [], dayDate: '1970-01-02', entries: [], isToday: false },
       { beyondBudgetTasks: [], dayDate: '1970-01-03', entries: [], isToday: false },
-      {
-        beyondBudgetTasks: [],
-        dayDate: '1970-01-04',
-        entries: [
-          {
-            data: jasmine.any(Object),
-            id: 'FD3',
-            start: 255600000,
-            duration: h(1),
-            type: 'TaskPlannedForDay',
-          },
-          {
-            data: jasmine.any(Object),
-            id: 'FD4',
-            start: 259200000,
-            duration: h(0.5),
-            type: 'TaskPlannedForDay',
-          },
-        ],
-        isToday: false,
-      },
+      { beyondBudgetTasks: [], dayDate: '1970-01-04', entries: [], isToday: false },
     ] as any);
   });
 
@@ -738,50 +536,18 @@ describe('mapToScheduleDays()', () => {
       },
     );
 
+    // R1 is untimed and used to be split around lunch; only lunch remains
     expect(r).toEqual([
       {
         beyondBudgetTasks: [],
         dayDate: '1970-01-01',
         entries: [
           {
-            data: {
-              defaultEstimate: h(4),
-              friday: true,
-              id: 'R1',
-              lastTaskCreationDay: '1969-12-31',
-              monday: true,
-              repeatCycle: 'DAILY',
-              repeatEvery: 1,
-              saturday: true,
-              startDate: '1969-01-01',
-              startTime: undefined,
-              sunday: true,
-              thursday: true,
-              tuesday: true,
-              wednesday: true,
-            },
-            duration: h(3),
-            id: 'R1_1970-01-01',
-            start: hTz(9),
-            type: 'RepeatProjectionSplit',
-            plannedForDay: '1970-01-01',
-          },
-          {
             data: { endTime: '13:00', startTime: '12:00' },
             duration: h(1),
             id: 'LUNCH_BREAK_1970-01-01',
             start: hTz(12),
             type: 'LunchBreak',
-          },
-          {
-            data: jasmine.any(Object),
-            duration: h(1),
-            id: 'R1_1970-01-01_0',
-            start: hTz(13),
-            type: 'RepeatProjectionSplitContinuedLast',
-            splitIndex: 0,
-            plannedForDay: '1970-01-01',
-            sourceOccurrenceDate: '1970-01-01',
           },
         ],
         isToday: true,
@@ -791,44 +557,11 @@ describe('mapToScheduleDays()', () => {
         dayDate: '1970-01-02',
         entries: [
           {
-            data: {
-              defaultEstimate: h(4),
-              friday: true,
-              id: 'R1',
-              lastTaskCreationDay: jasmine.any(String),
-              monday: true,
-              repeatCycle: 'DAILY',
-              repeatEvery: 1,
-              saturday: true,
-              startDate: '1969-01-01',
-              startTime: undefined,
-              sunday: true,
-              thursday: true,
-              tuesday: true,
-              wednesday: true,
-            },
-            duration: h(3),
-            id: 'R1_1970-01-02',
-            start: 115200000,
-            type: 'RepeatProjectionSplit',
-            plannedForDay: '1970-01-02',
-          },
-          {
             data: { endTime: '13:00', startTime: '12:00' },
             duration: h(1),
             id: 'LUNCH_BREAK_1970-01-02',
             start: 126000000,
             type: 'LunchBreak',
-          },
-          {
-            data: jasmine.any(Object),
-            duration: h(1),
-            splitIndex: 0,
-            id: 'R1_1970-01-02_0',
-            start: 129600000,
-            type: 'RepeatProjectionSplitContinuedLast',
-            plannedForDay: '1970-01-02',
-            sourceOccurrenceDate: '1970-01-02',
           },
         ],
         isToday: false,
@@ -885,6 +618,8 @@ describe('mapToScheduleDays()', () => {
       },
     );
 
+    // N1, the untimed R2 and the planner tasks FD1-FD4 used to be flowed in
+    // around the timed items; only the timed items and lunch keep a slot now
     expect(r[0]).toEqual({
       beyondBudgetTasks: [],
       dayDate: '1970-01-01',
@@ -895,13 +630,6 @@ describe('mapToScheduleDays()', () => {
           start: hTz(2),
           duration: h(1),
           type: 'ScheduledTask',
-        },
-        {
-          data: jasmine.any(Object),
-          id: 'N1',
-          start: hTz(9),
-          duration: h(2),
-          type: 'Task',
         },
         {
           data: jasmine.any(Object),
@@ -929,14 +657,6 @@ describe('mapToScheduleDays()', () => {
         },
         {
           data: jasmine.any(Object),
-          duration: h(1),
-          id: 'R2_1970-01-02',
-          start: dhTz(1, 9),
-          type: 'RepeatProjectionSplit',
-          plannedForDay: '1970-01-02',
-        },
-        {
-          data: jasmine.any(Object),
           id: 'S2',
           start: dhTz(1, 10),
           duration: h(0.5),
@@ -944,42 +664,10 @@ describe('mapToScheduleDays()', () => {
         },
         {
           data: jasmine.any(Object),
-          duration: h(1),
-          id: 'R2_1970-01-02_0',
-          start: dhTz(1, 10.5),
-          type: 'RepeatProjectionSplitContinuedLast',
-          splitIndex: 0,
-          plannedForDay: '1970-01-02',
-          sourceOccurrenceDate: '1970-01-02',
-        },
-        {
-          data: jasmine.any(Object),
-          id: 'FD1',
-          start: dhTz(1, 11.5),
-          duration: h(0.5),
-          type: 'SplitTaskPlannedForDay',
-        },
-        {
-          data: jasmine.any(Object),
           id: 'LUNCH_BREAK_1970-01-02',
           start: dhTz(1, 12),
           duration: h(1),
           type: 'LunchBreak',
-        },
-        {
-          data: jasmine.any(Object),
-          id: 'FD1_1970-01-02_0',
-          start: dhTz(1, 13),
-          duration: h(3.5),
-          type: 'SplitTaskContinuedLast',
-        },
-        {
-          data: jasmine.any(Object),
-          id: 'FD2',
-          start: dhTz(1, 16.5),
-          duration: h(0.5),
-          type: 'SplitTaskPlannedForDay',
-          isBeyondBudget: true,
         },
       ],
       isToday: false,
@@ -1012,29 +700,6 @@ describe('mapToScheduleDays()', () => {
           type: 'ScheduledRepeatProjection',
           plannedForDay: '1970-01-03',
           sourceOccurrenceDate: '1970-01-03',
-        },
-        {
-          data: {
-            defaultEstimate: 7200000,
-            friday: true,
-            id: 'R2',
-            lastTaskCreationDay: jasmine.any(String),
-            monday: true,
-            repeatCycle: 'DAILY',
-            repeatEvery: 1,
-            saturday: true,
-            startDate: '1969-01-01',
-            startTime: undefined,
-            sunday: true,
-            thursday: true,
-            tuesday: true,
-            wednesday: true,
-          },
-          duration: h(2),
-          id: 'R2_1970-01-03',
-          start: dhTz(2, 9),
-          type: 'RepeatProjection',
-          plannedForDay: '1970-01-03',
         },
         {
           data: { endTime: '13:00', startTime: '12:00' },
@@ -1277,10 +942,9 @@ describe('mapToScheduleDays()', () => {
   //     isToday: false,
   //   } as any);
   // });
-  it('should keep every segment of a flow projection pointing at its own occurrence day', () => {
-    // a 26h untimed projection starts on day 1, is pushed over midnight, and is
-    // then split again by a scheduled task on day 2 -> all four segments still
-    // belong to the day-1 occurrence
+  it('should not place an untimed projection, not even as split segments', () => {
+    // a 26h untimed projection used to start on day 1, be pushed over midnight
+    // and split again by a scheduled task on day 2; it gets no slot anymore
     const r = mapToScheduleDays(
       N,
       [NDS, '1970-01-02', '1970-01-03'],
@@ -1309,14 +973,7 @@ describe('mapToScheduleDays()', () => {
       .flatMap((d) => d.entries)
       .filter((e) => e.type.startsWith('RepeatProjection'));
 
-    expect(projectionSegments.length).toBe(3);
-    // this is what the schedule event click handler resolves the target date to
-    expect(
-      projectionSegments.map(
-        (e) =>
-          (e as { sourceOccurrenceDate?: string }).sourceOccurrenceDate ??
-          e.plannedForDay,
-      ),
-    ).toEqual([NDS, NDS, NDS]);
+    expect(projectionSegments).toEqual([]);
+    expect(r[1].entries.map((e) => e.id)).toEqual(['S2']);
   });
 });
