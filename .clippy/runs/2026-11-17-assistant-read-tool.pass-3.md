@@ -1,0 +1,13 @@
+# Standardized pass — cycle 3 (run 2026-11-17-assistant-read-tool)
+
+- Quality-category (Boundaries / Consistency / Contracts / Performance / Fitness / Proportionality): clean — Boundaries: the day roll-over lives in the read tools only, the builder stays pure and the server never rewrites the stored list (D5, D9); Consistency: the settings block now follows the server, as the grant list beside it does (`agent-capture.service.ts:139-141`, D11); Contracts: live migration settings read from the running compose config (F42) instead of assumed (D14); Performance: unchanged lists are not re-sent (F53, D10); Fitness: `rolledOver` and `asOf` tell the assistant which day the answer is for and how old the list is (D5); Proportionality: roll-over is date arithmetic over fields the list already holds — no time-zone data is added; substitution sources checked — `todayEndsAt` from `DateService` (`date.service.ts:60,69`), no server-side calendar library.
+- Coupled-change: clean — dropping the time fields touches D4, D5 and D9 together (cascade check in the tracker); the hooked settings template pulls its own spec into the edit set (F39, D15).
+- Consumer-enumeration: clean — consumers of the settings template hook: its spec (`agent-capture-settings.component.spec.ts`, F39) and the E2E selectors in `supersync-agent-capture.spec.ts` (they address existing controls; the new block adds `e2e` attributes of its own, D11).
+- Branch-coverage: clean — roll-over branches (same day / one day later / several days later / task planned for the new day / yesterday's unfinished today tasks) and settings states (off / on / pending / on-but-not-publishing) are named spec cases (D5, D11).
+- Failure-path: clean — a failed one-off migration leaves the official container serving (D14); an invalid date drops one field, not the publish (F49, D9).
+- Thorough-fix-default: clean — F40 is cured by making the server the displayed truth with an always-present stop button rather than by trying to keep two states equal; F44 by answering for the right day rather than flagging staleness.
+- Target-locality: clean — no new target this cycle beyond fields and keys inside files already named.
+- Silent-substitution-at-boundary: clean — after a roll-over the tools return `rolledOver: true` with the recomputed day; they never present yesterday's list as today's (F44, D5).
+- Canonical-ID-dropped-at-handoff: clean — unchanged from cycle 2.
+- Defensive-paranoia-vs-type-guarantee: clean — the builder's date guard checks values the types allow to be malformed at runtime (legacy data, F49).
+- Basis-cardinality: checked at [READY].
