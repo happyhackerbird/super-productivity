@@ -64,8 +64,10 @@
       <planner-task
         #firstGroupTask
         cdkDrag
-        (cdkDragStarted)="firstGroupTask.onPlannerGroupDragStarted()"
-        (cdkDragEnded)="firstGroupTask.onPlannerGroupDragEnded()"
+        (cdkDragStarted)="
+          firstGroupTask.onPlannerGroupDragStarted(); onDragStarted(task, $event)
+        "
+        (cdkDragEnded)="firstGroupTask.onPlannerGroupDragEnded(); onDragEnded()"
         [plannerGroupTasks]="isTaskGroupingEnabled() ? ungroupedTasks : []"
         [cdkDragData]="task"
         [cdkDragStartDelay]="dragDelayForTouch()"
@@ -121,8 +123,10 @@
         <planner-task
           #secondListTask
           cdkDrag
-          (cdkDragStarted)="secondListTask.onPlannerGroupDragStarted()"
-          (cdkDragEnded)="secondListTask.onPlannerGroupDragEnded()"
+          (cdkDragStarted)="
+            secondListTask.onPlannerGroupDragStarted(); onDragStarted(task, $event)
+          "
+          (cdkDragEnded)="secondListTask.onPlannerGroupDragEnded(); onDragEnded()"
           [plannerGroupTasks]="secondListTasks"
           [cdkDragData]="task"
           [cdkDragStartDelay]="dragDelayForTouch()"
@@ -153,8 +157,10 @@
             #groupTask
             [plannerGroupTasks]="group.tasks"
             cdkDrag
-            (cdkDragStarted)="groupTask.onPlannerGroupDragStarted()"
-            (cdkDragEnded)="groupTask.onPlannerGroupDragEnded()"
+            (cdkDragStarted)="
+              groupTask.onPlannerGroupDragStarted(); onDragStarted(task, $event)
+            "
+            (cdkDragEnded)="groupTask.onPlannerGroupDragEnded(); onDragEnded()"
             [cdkDragData]="task"
             [cdkDragStartDelay]="dragDelayForTouch()"
             [cdkDragDisabled]="multiSelect.isTouchSelectionMode()"
@@ -229,6 +235,8 @@
               [focusable]="true"
               [cdkDragData]="scheduledItem.task"
               [cdkDragStartDelay]="dragDelayForTouch()"
+              (cdkDragStarted)="onDragStarted(scheduledItem.task, $event)"
+              (cdkDragEnded)="onDragEnded()"
               [cdkDragDisabled]="multiSelect.isTouchSelectionMode()"
               [cdkDragLockAxis]="isXs() ? 'y' : ''"
             ></planner-task>
