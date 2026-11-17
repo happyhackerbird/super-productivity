@@ -1,0 +1,53 @@
+{
+  "target_sha": "1f73dce390f5224e98a124e10c11650e234e9c99",
+  "acceptance_revision": "5df3e19cccb91fb17aa99bfe13f4720974eb58ec",
+  "feature": "schedule-no-auto-placement",
+  "verdict": "accept with follow-ups",
+  "requirements": {
+    "R1": {
+      "status": "met",
+      "evidence": "Source: map-to-schedule-days.ts:89-100 passes [] for untimed tasks, including current task. no-auto-placement.spec.ts:113-136 covers Today/current inputs. Angular execution not exercised."
+    },
+    "R2": {
+      "status": "met",
+      "evidence": "Source: map-to-schedule-days.ts:92-100 passes [] and {} for ordinary/planner tasks; create-schedule-days.ts:136-150 shows both emptied producers. New spec:140-154 separately covers planner and dueDay. Angular execution not exercised."
+    },
+    "R3": {
+      "status": "met",
+      "evidence": "Source: map-to-schedule-days.ts:77-100 leaves timed blocker inputs unchanged and passes [] for untimed configs. create-schedule-days.ts:115-118,178-190 has no untimed occurrences to render. New spec:158-162,193-219. Angular execution not exercised."
+    },
+    "R4": {
+      "status": "met",
+      "evidence": "Source: unchanged blocker construction, empty-flow insertion (create-view-entries-for-day.ts:48-58; insert-blocked-blocks-view-entries-for-schedule.ts:28-38), cross-day partition/conversion (create-blocked-blocks-by-day-map.ts:44-95,109-162; create-view-entries-for-block.ts:11-76). Scheduled selection independent of planner/currentId. No changed timed expectation among all 19 changed existing cases. Runtime equivalence not exercised; full trace and planner caveat in review.md."
+    },
+    "R5": {
+      "status": "met",
+      "evidence": "Source: create-schedule-days.ts:39-47,136-168,192-205,321-334 keeps flow and budget empty and excludes scheduled types from budget insertion. Event mapper:14-36 preserves day-indexed empty arrays, day-page:22-33 safely uses some, schedule.component.ts:326-328 safely concatenates month events, week component:163-169 defaults absent lists. beyondBudgetDays contains empty inner arrays, not necessarily outer []. UI not exercised; retained budget UI required by amended R5."
+    },
+    "R6": {
+      "status": "not exercised",
+      "evidence": "Static review confirms one new spec with eight cases, five existing mapper-level specs adapted in 19 tests, no deleted specs and no weakened timed expectation. [INFERENCE] R1-R3 fail on base by source producer trace. Installation blocked before Angular launch, so no observed base failure or candidate pass. Full changed-expectation inventory in review.md."
+    }
+  },
+  "reviewer": "AO-136 / OpenAI coding assistant; independent ordinary review with two read-only reviewer slices",
+  "method": "ordinary",
+  "confirmed_findings": [],
+  "suspected_findings": [],
+  "unexpected_changes": [],
+  "protected_inputs": {
+    "status": "unchanged",
+    "evidence": "git diff --exit-code base target for tasks/, scripts/check*, AGENTS.md, CLAUDE.md, aos-*.toml, karma.conf.js, angular.json, tsconfig*.json, package*.json: exit 0, empty output."
+  },
+  "test_loading": {
+    "status": "unchanged by source comparison; not exercised",
+    "evidence": "Only seven allowed mapper/spec paths differ. No deleted *.spec.ts files; upstream specs and loading configs byte-identical to base. No new skip or filter found."
+  },
+  "limitations": [
+    "npm ci did not finish during a 600-second wait; no npm output at that time. Subsequent diagnostic glob returned EACCES for /root/.npm/_logs. This does not establish that npm needed that directory or that networking was denied. Stopped under explicit user instruction; reviewer terminated npm (exit 143, Terminated).",
+    "ts-patch, env generation, package builds, Angular specs and checkFile were not run. No exit 137 observed; no alternative runner, retry or workaround used. No runtime smoke or visual verification.",
+    "R1-R5 met statuses denote source evidence, not observed tests; R6 runtime is not exercised. Operator-host validation remains necessary.",
+    "New R4 fixtures do not independently pin midnight/multiday, work boundaries, equal-start ordering or timed currentId; source paths unchanged.",
+    "Now-unused currentId; untimed cfg/planner parameters remain read by early guard but no longer feed placement. Lint status unknown.",
+    "Some stale test names; UNTIMED_TYPES is not a universal classifier; oversized-budget fixture does not isolate a formerly nonempty budget. Details in review.md."
+  ]
+}

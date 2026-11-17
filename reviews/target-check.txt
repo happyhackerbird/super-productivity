@@ -1,0 +1,158 @@
+AO-136 ordinary review execution evidence
+Checkout path: /tmp/target
+Target revision: 1f73dce390f5224e98a124e10c11650e234e9c99
+Acceptance revision: 5df3e19cccb91fb17aa99bfe13f4720974eb58ec
+Code base: 1435efa96c2debc8e99305bead8d2e69ee259f30
+No builder report or pre-existing reviews read. Commands below are reviewer execution, not builder claims.
+
+$ git show 5df3e19cccb91fb17aa99bfe13f4720974eb58ec:tasks/01-schedule-no-auto-placement.md
+[cwd /sandbox/repo; exit 0]
+Output summary: read full brief; Repair r3 minimal mapper-only repair supersedes conflicting R5/removal instructions.
+
+$ git worktree add /tmp/target 1f73dce390f5224e98a124e10c11650e234e9c99 && git -C /tmp/target rev-parse HEAD
+[cwd /sandbox/repo; exit 0]
+Preparing worktree (detached HEAD 1f73dce39)
+HEAD is now at 1f73dce39 fix(schedule): no auto-placement via mapToScheduleDays only (AO-134 r3)
+1f73dce390f5224e98a124e10c11650e234e9c99
+[checkout progress lines trimmed]
+
+
+$ git diff --stat 1435efa96c2debc8e99305bead8d2e69ee259f30 1f73dce390f5224e98a124e10c11650e234e9c99 -- . && git diff --name-status 1435efa96c2debc8e99305bead8d2e69ee259f30 1f73dce390f5224e98a124e10c11650e234e9c99 -- .
+[cwd /sandbox/repo; exit 0]
+ .../map-to-schedule-days-extended.spec.ts          |  94 +----
+ .../map-schedule-data/map-to-schedule-days.spec.ts | 395 ++-------------------
+ .../map-schedule-data/map-to-schedule-days.ts      |  28 +-
+ .../month-view-repeat-projection-day.spec.ts       |   5 +-
+ .../map-schedule-data/no-auto-placement.spec.ts    | 239 +++++++++++++
+ .../scheduled-repeat-projection-dedup.spec.ts      |   5 +-
+ .../wait-for-completion-repeat-projection.spec.ts  |   3 +-
+ 7 files changed, 285 insertions(+), 484 deletions(-)
+M	src/app/features/schedule/map-schedule-data/map-to-schedule-days-extended.spec.ts
+M	src/app/features/schedule/map-schedule-data/map-to-schedule-days.spec.ts
+M	src/app/features/schedule/map-schedule-data/map-to-schedule-days.ts
+M	src/app/features/schedule/map-schedule-data/month-view-repeat-projection-day.spec.ts
+A	src/app/features/schedule/map-schedule-data/no-auto-placement.spec.ts
+M	src/app/features/schedule/map-schedule-data/scheduled-repeat-projection-dedup.spec.ts
+M	src/app/features/schedule/map-schedule-data/wait-for-completion-repeat-projection.spec.ts
+
+
+$ git diff 1435efa96c2debc8e99305bead8d2e69ee259f30 1f73dce390f5224e98a124e10c11650e234e9c99 -- src/app/features/schedule/map-schedule-data/map-to-schedule-days.ts
+[cwd /sandbox/repo; exit 0]
+diff --git a/src/app/features/schedule/map-schedule-data/map-to-schedule-days.ts b/src/app/features/schedule/map-schedule-data/map-to-schedule-days.ts
+index 194688747..265fbf535 100644
+--- a/src/app/features/schedule/map-schedule-data/map-to-schedule-days.ts
++++ b/src/app/features/schedule/map-schedule-data/map-to-schedule-days.ts
+@@ -1,4 +1,4 @@
+-import { Task, TaskWithDueTime, TaskWithoutReminder } from '../../tasks/task.model';
++import { Task, TaskWithDueTime } from '../../tasks/task.model';
+ import { TaskRepeatCfg } from '../../task-repeat-cfg/task-repeat-cfg.model';
+ 
+ import { PlannerDayMap } from '../../planner/planner.model';
+@@ -67,14 +67,6 @@ export const mapToScheduleDays = (
+     return [];
+   }
+ 
+-  const initialTasks: Task[] = currentId
+-    ? resortTasksWithCurrentFirst(currentId, tasks)
+-    : tasks;
+-
+-  const nonScheduledTasks: TaskWithoutReminder[] = initialTasks.filter(
+-    (task) => !(typeof task.dueWithTime === 'number'),
+-  ) as TaskWithoutReminder[];
+-
+   // Span the blocker window across every rendered day. The 10-day default was
+   // tuned for week view, where the visible range always sits inside it; a
+   // month grid is up to 42 days anchored at its first cell, so work-hours
+@@ -94,11 +86,14 @@ export const mapToScheduleDays = (
+     startOfNextDayDiffMs,
+   );
+ 
++  // No automatic placement: untimed tasks (Today list, planner days, dueDay
++  // only) and untimed repeat projections are not flowed into time slots.
++  // Only blocker blocks (timed tasks/projections, calendar, work/lunch) show.
+   const v = createScheduleDays(
+-    nonScheduledTasks,
+-    unScheduledTaskRepeatCfgs,
++    [],
++    [],
+     dayDates,
+-    plannerDayMap,
++    {},
+     blockerBlocksDayMap,
+     workStartEndCfg,
+     now,
+@@ -107,12 +102,3 @@ export const mapToScheduleDays = (
+ 
+   return v;
+ };
+-
+-const resortTasksWithCurrentFirst = (currentId: string, tasks: Task[]): Task[] => {
+-  let newTasks = tasks;
+-  const currentTask = tasks.find((t) => t.id === currentId);
+-  if (currentTask) {
+-    newTasks = [currentTask, ...tasks.filter((t) => t.id !== currentId)] as Task[];
+-  }
+-  return newTasks;
+-};
+
+
+$ git diff --exit-code 1435efa96c2debc8e99305bead8d2e69ee259f30 1f73dce390f5224e98a124e10c11650e234e9c99 -- tasks/ 'scripts/check*' AGENTS.md CLAUDE.md 'aos-*.toml' karma.conf.js angular.json 'tsconfig*.json' 'package*.json'
+[cwd /sandbox/repo; exit 0]
+(no output)
+
+$ git diff --name-only --diff-filter=D 1435efa96c2debc8e99305bead8d2e69ee259f30 1f73dce390f5224e98a124e10c11650e234e9c99 -- '*.spec.ts'
+[cwd /sandbox/repo; exit 0]
+(no output)
+
+$ git diff --exit-code 1435efa96c2debc8e99305bead8d2e69ee259f30 1f73dce390f5224e98a124e10c11650e234e9c99 -- src/app/features/schedule/ ':(exclude)src/app/features/schedule/map-schedule-data/map-to-schedule-days.ts' ':(exclude)src/app/features/schedule/map-schedule-data/map-to-schedule-days.spec.ts' ':(exclude)src/app/features/schedule/map-schedule-data/map-to-schedule-days-extended.spec.ts' ':(exclude)src/app/features/schedule/map-schedule-data/month-view-repeat-projection-day.spec.ts' ':(exclude)src/app/features/schedule/map-schedule-data/no-auto-placement.spec.ts' ':(exclude)src/app/features/schedule/map-schedule-data/scheduled-repeat-projection-dedup.spec.ts' ':(exclude)src/app/features/schedule/map-schedule-data/wait-for-completion-repeat-projection.spec.ts'
+[cwd /sandbox/repo; exit 0]
+(no output)
+
+$ Wait for npm ci (600-second subprocess wait, not a retry)
+[cwd /tmp/target; exit TimeoutExpired]
+(no output)
+
+$ ELECTRON_SKIP_BINARY_DOWNLOAD=1 npm ci --ignore-scripts --no-audit --no-fund --fetch-retries 5 --maxsockets 4
+[cwd /tmp/target; exit 143]
+Terminated
+
+Reviewer stopped the outstanding npm process after the diagnostic EACCES, per task stop instruction.
+
+$ python3 scripts/check_review.py --target 1f73dce390f5224e98a124e10c11650e234e9c99 --acceptance 5df3e19cccb91fb17aa99bfe13f4720974eb58ec --feature schedule-no-auto-placement
+[cwd /sandbox/repo; exit 0]
+review delivered for 1f73dce390f5224e98a124e10c11650e234e9c99; verdict: accept with follow-ups; 5 met, 0 not met, 1 not exercised
+
+
+$ ps -eo pid,ppid,etime,stat,args
+[cwd /tmp/target; exit 0; relevant output only]
+669 584 11:12 S /bin/sh -c ELECTRON_SKIP_BINARY_DOWNLOAD=1 npm ci ...
+670 669 11:12 Sl npm ci
+
+Tool: glob /tmp/pi-home/.npm/_logs/*;/root/.npm/_logs/*;/sandbox/.npm/_logs/*
+Output: EACCES: permission denied, stat /root/.npm/_logs
+Stopped execution investigation per explicit user instruction; no permission workaround.
+Reviewer cleanup: sent SIGTERM to own npm child PID 670, waited for its shell. Exit 143, output Terminated.
+The 600-second TimeoutExpired was a wait timeout, not exit 137 and not an npm exit.
+
+NOT RUN because installation remained incomplete and diagnostic access was denied:
+$ npx ts-patch install
+[not run; no output or pass/fail claim]
+$ npm run env
+[not run; no output or pass/fail claim]
+$ npm run sync-core:build
+[not run; no output or pass/fail claim]
+$ npm run sync-providers:build
+[not run; no output or pass/fail claim]
+$ npm run shared-schema:build
+[not run; no output or pass/fail claim]
+$ npm run plugin-api:build
+[not run; no output or pass/fail claim]
+$ npm run test:file src/app/features/schedule/map-schedule-data/
+[not run; no output or pass/fail claim]
+$ npm run checkFile src/app/features/schedule/map-schedule-data/map-to-schedule-days-extended.spec.ts src/app/features/schedule/map-schedule-data/map-to-schedule-days.spec.ts src/app/features/schedule/map-schedule-data/map-to-schedule-days.ts src/app/features/schedule/map-schedule-data/month-view-repeat-projection-day.spec.ts src/app/features/schedule/map-schedule-data/no-auto-placement.spec.ts src/app/features/schedule/map-schedule-data/scheduled-repeat-projection-dedup.spec.ts src/app/features/schedule/map-schedule-data/wait-for-completion-repeat-projection.spec.ts
+[not run; no output or pass/fail claim]
+
+Source assessment: R1-R5 met by source; R6 runtime not exercised. All runtime/spec-only evidence not exercised.
+Diff: exactly seven allowed files, 285 insertions, 484 deletions; no deleted specs; protected inputs unchanged.
+No builds, tests, lint, or formatter run by either read-only reviewer slice.
+See review.md for source lines, full 19-test expectation inventory, R4 planner/currentId/multiday trace and limitations.
