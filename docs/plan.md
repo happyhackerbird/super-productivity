@@ -3,8 +3,8 @@
 ## Coordinator record
 
 Owner: the bus lease (coordinated repository, server route); this record is the durable state.
-Last mutation: 2026-11-17 16:56:08 UTC: `aos add` AO-135 (independent review of AO-134 @ 04003d36; brief and `scripts/check_review.py` landed at 326e06a1) and `aos ready AO-135`; event 93 closed.
-Next safe action: wait for the review task. When it delivers: read reviews/review.md and target-check.txt on its branch, save `reviews/AO-134.md`, record push, then `aos integrate AO-134 --wait`, then `aos accept-request AO-134 --memo-file ...`. If the reviewer could not run Karma, R1-R5 are "not exercised" and the recommendation stays closed; report to the operator.
+Last mutation: 2026-11-17 ~17:25 UTC: event 96 (operator: model policy for non-implementation tasks; upstream-merge question for the AO-134 accept) recorded below and closed. AO-135 still running (r1, claude).
+Next safe action: wait for the review task. When it delivers: read reviews/review.md and target-check.txt on its branch, save `reviews/AO-134.md`, record push, then `aos integrate AO-134 --wait`, then `aos accept-request AO-134 --memo-file ...`; the memo must carry the section "For the AO-134 accept memo" below (deletion size, upstream-merge cost vs a minimal change, dead beyond-budget UI) stated plainly. If the reviewer could not run Karma, R1-R5 are "not exercised" and the recommendation stays closed; report to the operator.
 
 ### Goal and authorization
 - Outcome (operator message, bus events 83 and 84, 2026-11-17): in the Schedule view nothing is
@@ -26,6 +26,7 @@ Next safe action: wait for the review task. When it delivers: read reviews/revie
 | When (UTC) | Question | Route and method (version) | Why not simpler | What permits the next step |
 |---|---|---|---|---|
 | 2026-11-17 16:00 | Is the brief finishable now? | Implementation task after operator answers Q1/Q2; no assessment/design task | The operator located the code path; the remaining unknown is a product scope question, not a technical one | Operator answers Q1 and Q2 |
+| 2026-11-17 17:25 | Model for non-implementation tasks (operator, event 96) | From now on review, assessment, test attack and acceptance authoring may run `--harness pi --model openai-codex/gpt-6-astra` or `openai-codex/gpt-6.1-sol` (`aos add --model`). gpt-6.1-sol is unproven on this worker: on a model failure fall back to gpt-6-astra and say so. Implementation stays claude. AO-135 is not restarted | Operator instruction; spares the Claude limit and gives review a different model family | Applies to the next commissioned non-implementation task (e.g. a re-review after a repair) |
 | 2026-11-17 16:10 | Delivery check for the implementation | Repo default command (`test:tools` after package builds), as for AO-11; Angular specs evidenced in the worker report and re-run by the reviewer | Karma needs ChromeHeadless, unverified in the sandbox; an environment failure would burn the single attempt. No proof pipeline per operator (Q2) | Review verdict per R1-R6 with spec output |
 
 ### Assignments
@@ -39,6 +40,38 @@ Attempts used: 1 of 1 implementation (r2 delivered; r1 was an environment failur
 
 Earlier tasks on the bus for this repo (before this record existed): AO-8 cancelled, AO-9 cancelled,
 AO-11 done (overdue-column drag into groups, single claude headless task, no proof pipeline).
+
+### For the AO-134 accept memo (operator, event 96; coordinator's own reading of 04003d36, not the independent review)
+- Size: 1435efa9..04003d36 removes 2,565 lines and adds 425. Production code: -1,043/+37 (whole
+  files deleted: `insert-blocked-blocks-view-entries-for-schedule.ts` 359,
+  `create-schedule-view-entries-for-normal-tasks.ts` 46, `get-tasks-within-and-beyond-budget.ts` 37;
+  `create-schedule-days.ts` -405, `create-view-entries-for-day.ts` -129, `SCHEDULE_FLOW_TYPES`,
+  `isFlowableEntryVE`/`isTaskDataType`/`isContinuedTaskType`). Specs: -1,522/+388 (two spec files
+  deleted, five rewritten, `no-auto-placement.spec.ts` +239).
+- Upstream merge cost: in the 6 months before the fork point (2026-05-17..10-10), 8 upstream
+  commits touched the deleted/rewritten mapping files (#7994, #9314, #9377, #9671, #9982, #10141,
+  #10209, #10689), about one every three weeks. With the candidate, each such future upstream
+  commit is a modify/delete or content conflict to resolve by hand, and upstream's own specs for
+  those files (which encode auto-placement) conflict too. A minimal change (in
+  `map-to-schedule-days.ts`, pass no untimed tasks, no untimed repeat cfgs and an empty planner map
+  into `createScheduleDays`, about 5-10 lines, plus the new spec) leaves those files byte-identical
+  to upstream, so upstream edits to them merge cleanly; conflicts are then limited to those few
+  lines, and upstream specs that assert auto-placement through `mapToScheduleDays` would still
+  need adapting at merge (that cost is the same either way). The minimal route keeps ~1,000 lines
+  of code that is unreachable in production. Judgement: for a fork that wants to keep merging
+  upstream, the minimal change is materially cheaper; the deletion is cleaner only if the fork
+  does not plan to track upstream in this area.
+- Beyond-budget UI after the candidate: dead in production. `beyondBudgetTasks` is always `[]`
+  (`create-schedule-days.ts:44`), and `map-schedule-days-to-schedule-events.ts` is the only
+  producer of `isBeyondBudget` and of `TaskPlannedForDay`; nothing produces
+  `SplitTaskPlannedForDay` any more. So the week header badge (`schedule-week.component.html:15-30`,
+  `beyondBudgetStats`/`beyondBudgetTooltips`), the `beyondBudget` inputs in
+  `schedule-day-panel.component.html:33` and `schedule.component.html:168,180`, `monthEvents`'
+  concat, the `is-beyond-budget` class/tooltip and `TaskPlannedForDay`/`SplitTaskPlannedForDay`
+  branches in `schedule-event.component.{ts,html,scss}`, and `schedule-week-drag.service.ts:910`
+  all remain but never fire. They render nothing (the badge is behind `count > 0`), so nothing
+  visible is left over; specs still feed them synthetic data. The brief (R5) allowed leaving them
+  when removal is more than trivial; whether R5 is met is the reviewer's call.
 
 ### Proof on main
 | Feature | Files | Commit | Author task / run | Attack task / run | Attack record |
