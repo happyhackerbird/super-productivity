@@ -1,12 +1,13 @@
 # Run: 2026-11-17-assistant-read-tool
 
-Status: [READY]
-Phase: investigate-design
+Status: in-progress
+Phase: implement
 Task: ChatGPT reads the operator's tasks through the self-hosted SuperSync /mcp (list_tasks / get_task over a plaintext read model), create_task unchanged.
 Mode: auto-battle
 Profile: lean
 Cycles complete: 6
 Branch: assistant-read-tool (from upstream-v20.0.0 @ 01ef235b57)
+Implementation model: claude-opus-5-5
 Dispatch models: impl opus, verify opus (clippy.config/models; brief "Settled" item 7)
 
 ## Requirements record
