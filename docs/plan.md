@@ -3,8 +3,8 @@
 ## Coordinator record
 
 Owner: the bus lease (coordinated repository, server route); this record is the durable state.
-Last mutation: 2026-11-17 ~16:10 UTC: brief `tasks/01-schedule-no-auto-placement.md` committed with Q1/Q2 answers pinned (event 86).
-Next safe action: add the implementation task (claude, server, headless, `--require merge-check --require review`), record its id here, ready it; when it reaches review, run the step-6 checks and commission one independent review task.
+Last mutation: 2026-11-17 16:08 UTC: AO-134 added (brief @ 03b366cc) and readied; event 86 closed.
+Next safe action: wait for AO-134 r1. Answer worker questions from the brief where it settles them. When it reaches review: step-6 checks (locked paths, removed specs, `aos integrate AO-134 --wait`), then add one independent review task `--reviews AO-134` pinning the candidate SHA, asking it to re-run the schedule specs. A failed/blocked run is reported, not retried, until its cause is recorded.
 
 ### Goal and authorization
 - Outcome (operator message, bus events 83 and 84, 2026-11-17): in the Schedule view nothing is
@@ -31,6 +31,7 @@ Next safe action: add the implementation task (claude, server, headless, `--requ
 ### Assignments
 | Task | Stage | Brief (path @ commit) | Depends on | Acceptance | Run | State | Candidate / result | Evidence |
 |---|---|---|---|---|---|---|---|---|
+| AO-134 | implementation (claude, server, headless; requires merge-check + review) | `tasks/01-schedule-no-auto-placement.md` @ 03b366cc | — | repo workflow `test_command` (empty `--accept`) | r1 | ready 2026-11-17 16:08 | — | — |
 
 Attempts used: 0 of 1 implementation + 1 review. Repairs used: 0 of 1. Max 2 concurrent.
 
