@@ -1,5 +1,4 @@
 import { mapToScheduleDays } from './map-to-schedule-days';
-import { SVEType } from '../schedule.const';
 import { getDbDateStr } from '../../../util/get-db-date-str';
 import { DEFAULT_TASK, Task } from '../../tasks/task.model';
 
@@ -131,6 +130,7 @@ describe('mapToScheduleDays()', () => {
       p.workStartEndCfg as any,
     );
 
+    // the untimed repeat projections are not placed; the timed one keeps its slot
     expect(r[3]).toEqual({
       beyondBudgetTasks: [],
       dayDate: '2024-08-05',
@@ -159,90 +159,6 @@ describe('mapToScheduleDays()', () => {
           type: 'ScheduledRepeatProjection',
           plannedForDay: '2024-08-05',
           sourceOccurrenceDate: '2024-08-05',
-        },
-        {
-          data: {
-            defaultEstimate: 1800000,
-            friday: false,
-            id: 'lmjFQzTdJh8aSak3cu9SN',
-            isPaused: false,
-            lastTaskCreationDay: getDbDateStr(1722275904553),
-            monday: true,
-            order: 0,
-            projectId: 'lMLlW2yO',
-            quickSetting: 'WEEKLY_CURRENT_WEEKDAY',
-            repeatCycle: 'WEEKLY',
-            repeatEvery: 1,
-            saturday: false,
-            startDate: '2024-05-06',
-            sunday: false,
-            tagIds: ['TODAY'],
-            thursday: false,
-            title: 'Plan Week',
-            tuesday: false,
-            wednesday: false,
-          },
-          duration: 1800000,
-          id: 'lmjFQzTdJh8aSak3cu9SN_2024-08-05',
-          start: 1722842100000,
-          type: 'RepeatProjection',
-          plannedForDay: '2024-08-05',
-        },
-        {
-          data: {
-            defaultEstimate: 1200000,
-            friday: true,
-            id: 'Foclw2saS0jZ3LfLVM5fd',
-            isPaused: false,
-            lastTaskCreationDay: getDbDateStr(1722617221091),
-            monday: true,
-            order: 32,
-            projectId: 'DEFAULT',
-            quickSetting: 'MONDAY_TO_FRIDAY',
-            repeatCycle: 'WEEKLY',
-            repeatEvery: 1,
-            saturday: false,
-            startDate: '2024-07-30',
-            sunday: false,
-            tagIds: ['TODAY', 'DZHev64ka8kt4olVAujAe'],
-            thursday: true,
-            title: 'Also scheduled in the morning',
-            tuesday: true,
-            wednesday: true,
-          },
-          duration: 1200000,
-          id: 'Foclw2saS0jZ3LfLVM5fd_2024-08-05',
-          start: 1722843900000,
-          type: 'RepeatProjection',
-          plannedForDay: '2024-08-05',
-        },
-        {
-          data: {
-            defaultEstimate: 300000,
-            friday: true,
-            id: 'QRZ1qaGbKJSO-1-RoIh7F',
-            isPaused: false,
-            lastTaskCreationDay: getDbDateStr(1722617221091),
-            monday: true,
-            order: 0,
-            projectId: 'DEFAULT',
-            quickSetting: 'MONDAY_TO_FRIDAY',
-            repeatCycle: 'WEEKLY',
-            repeatEvery: 1,
-            saturday: false,
-            startDate: '2024-07-27',
-            sunday: false,
-            tagIds: ['TODAY'],
-            thursday: true,
-            title: 'Yap about my daily plans on mastodon',
-            tuesday: true,
-            wednesday: true,
-          },
-          duration: 300000,
-          id: 'QRZ1qaGbKJSO-1-RoIh7F_2024-08-05',
-          start: 1722845100000,
-          type: 'RepeatProjection',
-          plannedForDay: '2024-08-05',
         },
       ],
       isToday: false,
@@ -283,21 +199,19 @@ describe('mapToScheduleDays() tiny slice before work end', () => {
       ...add,
     }) as Task;
 
+  // untimed tasks are no longer placed automatically, on either day
   it('should move an undated task whole to the next workday', () => {
     const [todayDay, tomorrowDay] = map(task());
 
     expect(todayDay.entries).toEqual([]);
-    expect(tomorrowDay.entries.length).toBe(1);
-    expect(tomorrowDay.entries[0].type).toBe(SVEType.Task);
-    expect(tomorrowDay.entries[0].start).toBe(new Date(2026, 0, 21, 9, 0).getTime());
-    expect(tomorrowDay.entries[0].duration).toBe(60 * 60 * 1000);
+    expect(tomorrowDay.entries).toEqual([]);
   });
 
   it('should keep a task due today on its day as beyond budget', () => {
     const [todayDay, tomorrowDay] = map(task({ dueDay: today }));
 
     expect(todayDay.entries).toEqual([]);
-    expect(todayDay.beyondBudgetTasks.map((t) => t.id)).toEqual(['T']);
+    expect(todayDay.beyondBudgetTasks).toEqual([]);
     expect(tomorrowDay.entries).toEqual([]);
   });
 });

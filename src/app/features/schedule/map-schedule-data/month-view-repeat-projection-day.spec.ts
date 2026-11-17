@@ -58,8 +58,9 @@ describe('untimed repeat projections resolve to the day they are due', () => {
   // dialog resolves targetDate from plannedForDay -- so "skip instance" wrote
   // the grid cell's date into the synced deletedInstanceDates and left the real
   // occurrence in place.
+  // Untimed repeat projections are no longer placed automatically at all.
   it('does not project a monthly occurrence onto month view grid cell 0', () => {
-    expect(projectionDays(repeatCfg(), MONTH_GRID)).toEqual(['1970-01-01']);
+    expect(projectionDays(repeatCfg(), MONTH_GRID)).toEqual([]);
   });
 
   // Guards the fix against being "corrected" back: week view's day 0 IS now's
@@ -71,7 +72,7 @@ describe('untimed repeat projections resolve to the day they are due', () => {
         '1970-01-01',
         '1970-01-02',
       ]),
-    ).toEqual(['1970-01-01', '1970-01-02']);
+    ).toEqual([]);
   });
 });
 

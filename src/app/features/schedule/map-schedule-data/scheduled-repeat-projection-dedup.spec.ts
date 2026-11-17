@@ -207,11 +207,12 @@ describe('scheduled repeat projection dedup (#7853)', () => {
       }));
     };
 
+    // untimed tasks and projections are no longer placed automatically, so
+    // neither the concrete untimed instance nor the projection shows up
     it('shows only the concrete instance, not the projection', () => {
       const entries = futureEntries();
-      expect(entries.length).toBe(1);
+      expect(entries.length).toBe(0);
       expect(entries.some((e) => e.type === SVEType.RepeatProjection)).toBe(false);
-      expect(entries[0].id).toBe('U1');
     });
   });
 });

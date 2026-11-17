@@ -1,4 +1,4 @@
-import { Task, TaskWithDueTime, TaskWithoutReminder } from '../../tasks/task.model';
+import { Task, TaskWithDueTime } from '../../tasks/task.model';
 import { TaskRepeatCfg } from '../../task-repeat-cfg/task-repeat-cfg.model';
 
 import { PlannerDayMap } from '../../planner/planner.model';
@@ -68,14 +68,6 @@ export const mapToScheduleDays = (
     return [];
   }
 
-  const initialTasks: Task[] = currentId
-    ? resortTasksWithCurrentFirst(currentId, tasks)
-    : tasks;
-
-  const nonScheduledTasks: TaskWithoutReminder[] = initialTasks.filter(
-    (task) => !(typeof task.dueWithTime === 'number'),
-  ) as TaskWithoutReminder[];
-
   // Span the blocker window across every rendered day. The 10-day default was
   // tuned for week view, where the visible range always sits inside it; a
   // month grid is up to 42 days anchored at its first cell, so work-hours
@@ -95,11 +87,14 @@ export const mapToScheduleDays = (
     startOfNextDayDiffMs,
   );
 
+  // No automatic placement: untimed tasks (Today list, planner days, dueDay
+  // only) and untimed repeat projections are not flowed into time slots.
+  // Only blocker blocks (timed tasks/projections, calendar, work/lunch) show.
   const v = createScheduleDays(
-    nonScheduledTasks,
-    unScheduledTaskRepeatCfgs,
+    [],
+    [],
     dayDates,
-    plannerDayMap,
+    {},
     blockerBlocksDayMap,
     workStartEndCfg,
     now,
@@ -108,13 +103,4 @@ export const mapToScheduleDays = (
   );
 
   return v;
-};
-
-const resortTasksWithCurrentFirst = (currentId: string, tasks: Task[]): Task[] => {
-  let newTasks = tasks;
-  const currentTask = tasks.find((t) => t.id === currentId);
-  if (currentTask) {
-    newTasks = [currentTask, ...tasks.filter((t) => t.id !== currentId)] as Task[];
-  }
-  return newTasks;
 };
