@@ -208,3 +208,9 @@ Stakes: S1 task data readable without read access or by another account; S2 task
 
 - Three more cases: a new list from the first account is stored while the second account's reading is on; an unchanged list from either account moves only its own `published_at`; the first account switching on again gets its own enablement back.
 - Acceptance, restated (replaces the cycle-11 wording): every drop / lowest-id / highest-id mutant of every `user_id` condition in `packages/super-sync-server/src/capture/capture-read.store.ts` and of the new delete in `src/capture/capture-key.store.ts` fails the read specs — except the forms tracker F100 names: conditions dropped from a publish UPDATE that still carries the enablement id (they cannot move data across accounts).
+
+### D19 amendment (cycle 13)
+
+- Two more cases: a list sent by one account with the OTHER account's enablement id is refused (409) and leaves the other account's row and list unchanged; the other account's own stored list sent with its enablement id through the store is refused (`read_disabled`).
+- Acceptance, restated without exemption (replaces the cycle-12 wording): every drop / lowest-id / highest-id mutant of every `user_id` condition in `packages/super-sync-server/src/capture/capture-read.store.ts` and of the new delete in `src/capture/capture-key.store.ts` fails the read specs.
+- The comments above the cycle-12 cases say what each case guards (no scratch labels).
