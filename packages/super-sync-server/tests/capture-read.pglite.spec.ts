@@ -738,7 +738,8 @@ describe('task reading (PGlite)', () => {
       expect(await rowOf(a.id)).toBeNull();
     });
 
-    // CANDIDATE (scratch only): write_max
+    // A publish must land in the caller's own row, whichever account has the
+    // higher id.
     it("a new list from the first account is stored while the second's is on", async () => {
       const othersRow = await rowOf(b.id);
       const res = await api(
@@ -752,7 +753,7 @@ describe('task reading (PGlite)', () => {
       expect(await rowOf(b.id)).toEqual(othersRow);
     });
 
-    // CANDIDATE (scratch only): touch_min, touch_max
+    // The unchanged-list shortcut may only touch the caller's row.
     it('an unchanged list from either account only moves its own published_at', async () => {
       const execute = mocked.prisma.$executeRaw as (
         ...args: unknown[]
@@ -781,7 +782,8 @@ describe('task reading (PGlite)', () => {
       }
     });
 
-    // CANDIDATE (scratch only): readback_max, readback_newest
+    // Switching on again answers with the caller's enablement, never another
+    // account's.
     it('the first account switching on again gets its own enablement back', async () => {
       const again = await api('PUT', '/read-access', undefined, a.jwt);
       expect(again.json()).toEqual({
@@ -789,6 +791,29 @@ describe('task reading (PGlite)', () => {
         enableId: a.enableId,
         publishedAt: a.publishedAt,
       });
+    });
+
+    // An enablement id is not a capability across accounts: a device that
+    // still holds another account's id must not write into that account's row.
+    it("refuses a list sent with the other account's enablement id", async () => {
+      const othersRow = await rowOf(b.id);
+      const res = await api(
+        'PUT',
+        '/read-model',
+        { enableId: b.enableId, model: readModel('Alpha leak') },
+        a.jwt,
+      );
+      expect(res.statusCode).toBe(409);
+      expect(await rowOf(b.id)).toEqual(othersRow);
+      expect(await listedTitles(b)).toEqual(['Bravo errand']);
+    });
+
+    it("refuses the other account's own list sent with its enablement id", async () => {
+      const othersRow = await rowOf(b.id);
+      expect(
+        await publishReadModel(a.id, b.enableId, othersRow?.payload as string, NOW),
+      ).toBe('read_disabled');
+      expect(await rowOf(b.id)).toEqual(othersRow);
     });
   });
 
