@@ -203,3 +203,8 @@ Stakes: S1 task data readable without read access or by another account; S2 task
 - The switch-offs (`DELETE /api/capture/read-access`, `DELETE /api/capture/key`) are also sent as the SECOND account, with the first account's row and list asserted intact.
 - A case where the second account's capture is off (no live key) while the first account's key is live expects `PUT /api/capture/read-access` → 409 `capture_disabled` and no row for the second account.
 - Acceptance: for every `user_id` condition in `packages/super-sync-server/src/capture/capture-read.store.ts` and for the new delete in `src/capture/capture-key.store.ts`, the mutants "condition dropped", "lowest-id account instead of the caller" and "highest-id account instead of the caller" (where the statement form allows each) make the read specs fail — except four sites recorded as unable to move data across accounts (tracker F100: the read-back taking the newest row; the unchanged-list UPDATE without account and enablement; either publish UPDATE without `user_id`).
+
+### D19 amendment (cycle 12)
+
+- Three more cases: a new list from the first account is stored while the second account's reading is on; an unchanged list from either account moves only its own `published_at`; the first account switching on again gets its own enablement back.
+- Acceptance, restated (replaces the cycle-11 wording): every drop / lowest-id / highest-id mutant of every `user_id` condition in `packages/super-sync-server/src/capture/capture-read.store.ts` and of the new delete in `src/capture/capture-key.store.ts` fails the read specs — except the forms tracker F100 names: conditions dropped from a publish UPDATE that still carries the enablement id (they cannot move data across accounts).
