@@ -44,6 +44,7 @@ CONTENT-CHANGED                                              src/app/features/co
 SAME                                                         src/app/features/config/store/global-config.reducer.ts:190-192
 SAME                                                         src/app/features/tasks/util/is-task-overdue.ts:10
 SAME                                                         src/app/op-log/validation/is-valid-entity-id.ts:8-12
+SAME                                                         src/app/features/issue/issue-content/issue-content.component.ts:65-67
 SAME                                                         src/app/root-store/meta/task-shared-meta-reducers/lww-update.meta-reducer.ts:683
 SAME                                                         src/app/root-store/meta/task-shared-meta-reducers/lww-update.meta-reducer.ts:683-700
 UNRESOLVED (ambiguous: 2 files)                              mcp-protocol.ts:55-73
@@ -66,8 +67,10 @@ SAME                                                         packages/super-sync
 CONTENT-CHANGED                                              packages/super-sync-server/templates/privacy.template.html:126-128
 CONTENT-CHANGED                                              packages/super-sync-server/templates/privacy.template.html:268-336
 CONTENT-CHANGED                                              packages/super-sync-server/tests/capture-oauth.pglite.spec.ts:215-218
+NEW                                                          packages/super-sync-server/tests/capture-read.pglite.spec.ts:159
 SAME                                                         packages/super-sync-server/tests/capture-routes.pglite.spec.ts:145-148
 SAME                                                         packages/super-sync-server/tests/migration-sql.spec.ts:657-672
+CONTENT-CHANGED                                              packages/super-sync-server/vitest.config.ts:35-36
 MOVED -> 557                                                 packages/sync-providers/src/super-sync/super-sync.ts:553-700
 MOVED (17 candidates, nearest 567)                           packages/sync-providers/src/super-sync/super-sync.ts:563
 MOVED -> 591                                                 packages/sync-providers/src/super-sync/super-sync.ts:587-592
@@ -81,6 +84,7 @@ SAME                                                         packages/super-sync
 MOVED -> 295                                                 src/app/app.component.ts:293
 SAME                                                         src/app/core/date/date.service.ts:46-54
 SAME                                                         src/app/features/config/global-config.model.ts:266
+SAME                                                         src/app/features/issue/issue-content/issue-content.component.html:109
 SAME                                                         src/app/features/planner/store/planner-carry-over.util.ts:25-43
 CONTENT-CHANGED                                              src/app/features/tasks/agent-capture/agent-capture-settings/agent-capture-settings.component.html:22-41
 MOVED -> 28                                                  src/app/features/tasks/agent-capture/agent-capture-settings/agent-capture-settings.component.html:25-41
@@ -89,6 +93,8 @@ SAME                                                         src/app/features/ta
 SAME                                                         src/app/features/tasks/agent-capture/agent-capture.service.ts:102-109
 CONTENT-CHANGED                                              src/app/features/tasks/agent-capture/agent-capture.service.ts:117-120
 MOVED -> 217                                                 src/app/features/tasks/agent-capture/agent-capture.service.ts:212-237
+NEW                                                          src/app/features/tasks/agent-read/agent-read-settings/agent-read-settings.component.html:8
+NEW                                                          src/app/features/tasks/agent-read/task-read-model.spec.ts:147
 SAME                                                         src/app/features/tasks/store/task.selectors.ts:526-529
 SAME                                                         src/app/features/tasks/util/is-task-overdue.ts:10
 SAME                                                         src/app/features/work-context/store/work-context.selectors.ts:346
@@ -96,7 +102,10 @@ SAME                                                         src/app/op-log/sync
 SAME                                                         src/app/op-log/validation/validation-fn.ts:39
 SAME                                                         src/app/root-store/app-state/app-state.selectors.ts:8
 SAME                                                         src/app/util/is-today.util.ts:3
+UNRESOLVED (line range beyond base file)                     packages/super-sync-server/src/capture/capture-key.store.ts:71
 SAME                                                         packages/super-sync-server/src/capture/capture-queue.store.ts:166
+NEW                                                          src/capture/capture-read.store.ts:50
+NEW                                                          src/capture/capture-read.store.ts:96
 SAME                                                         packages/super-sync-server/src/capture/capture.routes.ts:176-186
 UNRESOLVED (ambiguous: 3 files)                              super-sync.ts:553-700
 SAME                                                         e2e/tests/sync/supersync-agent-capture.spec.ts:33-97
@@ -104,6 +113,7 @@ SAME                                                         src/app/imex/sync/s
 SAME                                                         src/app/features/tasks/store/task.selectors.ts:521-558
 SAME                                                         tools/check-file.js:59-64
 SAME                                                         tools/mcp-registry/server.json:5
+SAME                                                         src/app/features/work-context/store/work-context.selectors.ts:85-92
 SAME                                                         src/app/features/work-context/store/work-context.selectors.ts:88-93
 SAME                                                         src/app/features/work-view/work-view.component.ts:379-381
-# totals: CONTENT-CHANGED 19, MOVED 11, NEW 2, SAME 72, UNRESOLVED 4
+# totals: CONTENT-CHANGED 20, MOVED 11, NEW 7, SAME 75, UNRESOLVED 5

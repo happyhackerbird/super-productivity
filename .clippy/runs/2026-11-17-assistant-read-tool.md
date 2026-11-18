@@ -1,7 +1,7 @@
 # Run: 2026-11-17-assistant-read-tool
 
 Status: in-progress
-Phase: implement
+Phase: verify
 Task: ChatGPT reads the operator's tasks through the self-hosted SuperSync /mcp (list_tasks / get_task over a plaintext read model), create_task unchanged.
 Mode: auto-battle
 Profile: lean
@@ -136,6 +136,8 @@ The brief is the request body: `.clippy/briefs/2026-11-17-assistant-read-tool.md
 - F93 [PENDING] (verify V4) `tagTitles` is not index-aligned with `tagIds` when a tag id has no known tag. — basis: `src/app/features/tasks/agent-read/task-read-model.spec.ts:147,166-167` asserts `tagIds ['tag1','missing','tag2']` with `tagTitles ['Urgent','Calls']`. Detection probe: read that spec case. Stakes: none.
 - F94 [VERIFIED — non-issue] (verify V5) Non-failure output of the executed battery (Vite configLoader warning, Prisma tip, browserslist notice, the E2E "UPDATE payload has unusual structure" warning) belongs to upstream classes outside the diff. — basis: isolated verify (first payload warning at E2E log line 200, during SuperSync setup; no config or browserslist file in the diff).
 - F95 [VERIFIED — non-issue] (verify V6, V7, V8) `docs/runbooks/` is a new directory by design; no document needs to contain the string `tasks:read`; D18's list omits opaque ids and the parent relation, which carry no user-written content. — basis: isolated verify (`git ls-tree 01ef235b57 docs/` has no `runbooks`; `git grep tasks:read HEAD`; brief "Open design questions" names subtasks).
+- F96 [VERIFIED — addressed: D20] The unit-test config excludes each real-Postgres integration spec by name; the new race spec was not in that list, so a unit run with `DATABASE_URL` set would run it against the mocked database and fail. — basis: `packages/super-sync-server/vitest.config.ts:35-36` (the neighbouring `capture-claim-race` and `connect-claim-race` entries), read by the orchestrator at cd80902c7d; U5 return state (F-batch-1: `TypeError: prisma.user.deleteMany is not a function` with `DATABASE_URL` set). Detection probe: run the new spec under the unit config with `DATABASE_URL` pointing at a Postgres.
+- F97 [VERIFIED — non-issue] The last-shared value is rendered through the pure `localeDate` pipe without the component's locale argument, so it would not re-render on a locale change while the settings are open; the previous `'shortDate'` form behaved the same and the value is re-read each time the block opens. — basis: U5 return state (F-batch-2: `issue-content.component.ts:65-67` comment, unexecuted); `src/app/features/tasks/agent-read/agent-read-settings/agent-read-settings.component.html` (the `localeDate: 'short'` line).
 
 ## Design decisions
 
@@ -400,6 +402,15 @@ The brief is the request body: `.clippy/briefs/2026-11-17-assistant-read-tool.md
 - D15 [INVALIDATED] by D20's script-list edit.
 - D15 [PENDING] As the cycle-6 body, with one more file in the closed set: `packages/super-sync-server/package.json` (the `test:integration:postgres` script list only) — twenty-six files. Basis: brief Boundaries; F31, F39, F57, F78, F91.
 - D15 [VERIFIED] Closed set of twenty-six upstream files edited. — basis: brief Boundaries; F31, F39, F57, F78, F91.
+- Implement — U5 (fix unit) complete: commit cd80902c7d (opus subagent, in place from cb22994b15). Integrity: HEAD advanced by exactly that commit, tree clean, 7 paths inside the unit's scope; no server product change (`git diff --quiet cb22994b15 -- packages/super-sync-server/src` exit 0, per the unit). Orchestrator re-run: the six server spec files → 135 passed, 0 skipped. Unit's evidence: D19 red-first — each of the four account-condition mutants fails the new spec on an assertion (1, 2, 1, 1 failed) and the shipped store passes 48; D20 red-first on a throwaway `postgres:16-alpine` — without ` FOR SHARE` `1 failed | 1 passed` (`expected [ 'disable' ] to deeply equal []`), shipped store `2 passed`, 10 of 10 repeats; upstream `capture-claim-race` 5 passed on the same database; app specs 11 / 23 / 31 SUCCESS after 3 FAILED against the old builder and template; `checkFile` and prettier clean. Two reported deviations accepted: the "over-long id" builder case was updated because it asserted the old keep-unknown-tag behaviour; unknown tag ids are dropped after the cut to 50.
+- Loopback from U5 (actioned finding F96). Triage: design-enumeration gap — D20 named the script list as the pattern spec's only coupled config entry and missed the unit config's exclude list; sub-floor (a loud local test failure, no stakes class). Bounded: D20 and D15 amended, citation closure = those two.
+- D20 [INVALIDATED] by F96.
+- D20 [PENDING] As its cycle-9 body, plus: the new spec's path is added to the `exclude` list of `packages/super-sync-server/vitest.config.ts`, directly after the `capture-claim-race` entry. Acceptance adds: under the unit config the spec is not collected. Basis: F91, F96.
+- D20 [VERIFIED] Real-Postgres interleave spec, listed in the integration script and excluded from the unit config. — basis: F91, F96.
+- D15 [INVALIDATED] by F96.
+- D15 [PENDING] As the cycle-9 body, with one more file: `packages/super-sync-server/vitest.config.ts` (one `exclude` entry) — twenty-seven files. Basis: brief Boundaries; F31, F39, F57, F78, F91, F96.
+- D15 [VERIFIED] Closed set of twenty-seven upstream files edited. — basis: brief Boundaries; F31, F39, F57, F78, F91, F96.
+- Fix applied inline by the orchestrator (one file, one line; route "inline"): commit 6d4c86910e. Check: the new spec run by name under the unit config is not collected.
 
 ## Pin register
 

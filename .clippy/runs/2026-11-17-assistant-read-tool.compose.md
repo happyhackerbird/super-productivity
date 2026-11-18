@@ -193,3 +193,7 @@ Stakes: S1 task data readable without read access or by another account; S2 task
 ### D15 amendment (cycle 9)
 
 - One more upstream file in the closed set: `packages/super-sync-server/package.json` (the `test:integration:postgres` script list only) — twenty-six files.
+
+### D20 and D15 amendments (cycle 10)
+
+- The new race spec's path is also in the `exclude` list of `packages/super-sync-server/vitest.config.ts`, directly after the `capture-claim-race` entry, so the unit config does not collect it. That file joins the closed set of edited upstream files — twenty-seven files.
