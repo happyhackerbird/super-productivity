@@ -303,13 +303,50 @@ Expect ``Applying migration `20261117000000_add_capture_read_model` ``,
 `38|33|5|20261117000000_add_capture_read_model`.
 
 **If the migrate exits with anything other than 0: do not swap, and do not restart,
-stop or recreate the official container. Stop the procedure here.** A migration
-that failed or was interrupted leaves a record without a finish time, and that
-record stops the official image's start-up migrate (executed here, below). The
+stop or recreate the official container until the recovery below has run.** A
+migration that failed or was interrupted leaves a record without a finish time, and
+that record stops the official image's start-up migrate (executed here, below). The
 running official container keeps serving, but its next restart would fail.
-Recovery from a failed migrate is not designed in this procedure (blocked pending
-design). The record was simulated by inserting a row for the fork's migration with
-no finish time into the throwaway database. The official image then answered:
+
+Recovery: remove the half-applied migration, which returns the database to the
+state the official image expects. Both statements are safe to repeat.
+
+```sh
+docker rm -f supersync-migrate
+docker exec supersync-postgres sh -c 'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -v ON_ERROR_STOP=1 -c "DROP TABLE IF EXISTS capture_read_models;" -c "DELETE FROM _prisma_migrations WHERE migration_name = '"'"'20261117000000_add_capture_read_model'"'"';"'; echo "exit=$?"
+docker exec supersync-postgres sh -c 'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -Atc "select count(*), count(finished_at), count(rolled_back_at), max(migration_name) from _prisma_migrations"'
+```
+
+Expect `exit=0` and `37|32|5|20261103000000_connect_requests`, the line from the
+pre-flight. The official container then restarts normally. Read the failed
+migrate's output before trying again; a second attempt starts from the top of this
+section. Unverified on the server. Executed on the Mac on 2026-11-18 against a
+throwaway `postgres:16-alpine`, with the official v20.0.0 image (arm64 variant):
+a failed record and a leftover table were inserted by hand, the official migrate
+refused (exit 1), the two statements ran, and the official migrate then passed:
+
+```text
+== simulate interrupted fork migrate: failed row + leftover table
+INSERT 0 1
+CREATE TABLE
+ERROR: 20261117000000_add_capture_read_model is not a recoverable drop-then-create CONCURRENTLY index migration (a bare CREATE is intentionally fail-loud); refusing to auto-resolve.
+exit=1
+== recovery SQL
+DROP TABLE
+DELETE 1
+psql-exit=0
+37|32|5|20261103000000_connect_requests
+== official migrate after recovery
+exit=0
+== recovery SQL again
+NOTICE:  table "capture_read_models" does not exist, skipping
+DELETE 0
+psql-exit=0
+```
+
+The failed record in the first run below was simulated the same way, by inserting
+a row for the fork's migration with no finish time into the throwaway database.
+The official image then answered:
 
 ```text
 $ docker run --rm … ghcr.io/super-productivity/supersync:v20.0.0 sh scripts/migrate-deploy.sh
