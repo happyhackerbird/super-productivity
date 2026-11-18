@@ -557,6 +557,14 @@ describe('task reading (PGlite)', () => {
         )
       ).rows[0] ?? null;
 
+    const hasLiveKey = async (id: number): Promise<boolean> =>
+      (
+        await db.query(
+          'SELECT 1 FROM capture_keys WHERE user_id = $1 AND disabled_at IS NULL',
+          [id],
+        )
+      ).rows.length === 1;
+
     /** A live key, a capture token, an enablement and a published list of its own. */
     const setUpAccount = async (
       id: number,
@@ -659,6 +667,75 @@ describe('task reading (PGlite)', () => {
         enableId: b.enableId,
         publishedAt: b.publishedAt,
       });
+    });
+
+    // The same switch-offs sent by the later-created account: a delete aimed
+    // at the lowest account id instead of the caller's fails only here.
+    it("switching reading off for the second account leaves the first's row and list", async () => {
+      const firstRow = await rowOf(a.id);
+      expect(firstRow).not.toBeNull();
+      expect((await api('DELETE', '/read-access', undefined, b.jwt)).statusCode).toBe(
+        200,
+      );
+      expect(await rowOf(b.id)).toBeNull();
+      expect(await accessOf(b)).toEqual({
+        enabled: false,
+        enableId: null,
+        publishedAt: null,
+      });
+      expect(await rowOf(a.id)).toEqual(firstRow);
+      expect(await accessOf(a)).toEqual({
+        enabled: true,
+        enableId: a.enableId,
+        publishedAt: a.publishedAt,
+      });
+      expect(await listedTitles(a)).toEqual(['Alpha errand']);
+    });
+
+    it("switching capture off for the second account leaves the first's row and list", async () => {
+      const firstRow = await rowOf(a.id);
+      expect(firstRow).not.toBeNull();
+      expect((await api('DELETE', '/key', undefined, b.jwt)).statusCode).toBe(200);
+      expect(await rowOf(b.id)).toBeNull();
+      expect(await rowOf(a.id)).toEqual(firstRow);
+      expect(await accessOf(a)).toEqual({
+        enabled: true,
+        enableId: a.enableId,
+        publishedAt: a.publishedAt,
+      });
+      expect(await listedTitles(a)).toEqual(['Alpha errand']);
+    });
+
+    // The switch-on's key check must look at the caller's key only: the other
+    // account's live key does not count.
+    it("refuses reading for the second account while its capture is off and the first's is live", async () => {
+      expect((await api('DELETE', '/key', undefined, b.jwt)).statusCode).toBe(200);
+      expect(await hasLiveKey(b.id)).toBe(false);
+      expect(await hasLiveKey(a.id)).toBe(true);
+      expect(await accessOf(a)).toEqual({
+        enabled: true,
+        enableId: a.enableId,
+        publishedAt: a.publishedAt,
+      });
+      const refused = await api('PUT', '/read-access', undefined, b.jwt);
+      expect(refused.statusCode).toBe(409);
+      expect(refused.json()).toEqual({ error: 'capture_disabled' });
+      expect(await rowOf(b.id)).toBeNull();
+    });
+
+    it("refuses reading for the first account while its capture is off and the second's is live", async () => {
+      expect((await api('DELETE', '/key', undefined, a.jwt)).statusCode).toBe(200);
+      expect(await hasLiveKey(a.id)).toBe(false);
+      expect(await hasLiveKey(b.id)).toBe(true);
+      expect(await accessOf(b)).toEqual({
+        enabled: true,
+        enableId: b.enableId,
+        publishedAt: b.publishedAt,
+      });
+      const refused = await api('PUT', '/read-access', undefined, a.jwt);
+      expect(refused.statusCode).toBe(409);
+      expect(refused.json()).toEqual({ error: 'capture_disabled' });
+      expect(await rowOf(a.id)).toBeNull();
     });
   });
 
