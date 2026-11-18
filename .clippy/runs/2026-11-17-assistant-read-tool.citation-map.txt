@@ -1,0 +1,109 @@
+UNRESOLVED (ambiguous: 3 files)                              AGENTS.md:82
+SAME                                                         packages/super-sync-server/Dockerfile.test:58-73
+CONTENT-CHANGED                                              src/app/features/tasks/agent-capture/agent-capture-settings/agent-capture-settings.component.html:22-41
+MOVED -> 37                                                  src/app/features/tasks/agent-capture/agent-capture-settings/agent-capture-settings.component.spec.ts:36
+SAME                                                         src/app/features/tasks/agent-capture/agent-capture.service.ts:69
+SAME                                                         src/app/features/tasks/agent-capture/agent-capture.service.ts:79-99
+SAME                                                         src/app/features/tasks/agent-capture/agent-capture.service.ts:91-94
+CONTENT-CHANGED                                              src/app/features/tasks/agent-capture/agent-capture.service.ts:102-120
+CONTENT-CHANGED                                              src/app/features/tasks/agent-capture/agent-capture.service.ts:117-120
+MOVED -> 217                                                 src/app/features/tasks/agent-capture/agent-capture.service.ts:212-237
+MOVED -> 230                                                 src/app/features/tasks/agent-capture/agent-capture.service.ts:225-236
+SAME                                                         src/app/root-store/app-state/app-state.effects.ts:22-33
+SAME                                                         src/app/root-store/app-state/app-state.selectors.ts:8
+CONTENT-CHANGED                                              packages/super-sync-server/src/capture/capture-key.store.ts:25-69
+CONTENT-CHANGED                                              packages/super-sync-server/src/capture/capture-mcp.routes.ts:50-107
+MOVED -> 83                                                  packages/super-sync-server/src/capture/capture-mcp.routes.ts:76
+SAME                                                         packages/super-sync-server/src/capture/capture-oauth-token.ts:63
+CONTENT-CHANGED                                              packages/super-sync-server/tests/capture-oauth.pglite.spec.ts:215-218
+SAME                                                         packages/super-sync-server/src/capture/capture-oauth.routes.ts:36
+CONTENT-CHANGED                                              packages/super-sync-server/src/capture/capture-oauth.routes.ts:81
+SAME                                                         packages/super-sync-server/src/capture/capture-oauth.store.ts:28-34
+CONTENT-CHANGED                                              packages/super-sync-server/tests/capture-pglite.helper.ts:23-38
+CONTENT-CHANGED                                              packages/super-sync-server/tests/capture-pglite.helper.ts:28
+SAME                                                         packages/super-sync-server/src/capture/capture-queue.store.ts:166
+SAME                                                         packages/super-sync-server/tests/capture-routes.pglite.spec.ts:120-148
+SAME                                                         packages/super-sync-server/src/capture/capture.routes.ts:176-186
+SAME                                                         packages/super-sync-server/src/capture/capture.routes.ts:176-212
+SAME                                                         packages/super-sync-server/src/capture/capture.routes.ts:194-198
+SAME                                                         src/app/op-log/sync-providers/credential-store.service.ts:317
+SAME                                                         src/app/core/date/date.service.ts:46-54
+SAME                                                         docker-compose.supersync.yaml:9-20
+SAME                                                         docs/plans/2026-10-26-assistant-connector-directories.md:405-437
+SAME                                                         docs/wiki/3.01-API.md:170
+CONTENT-CHANGED                                              docs/wiki/3.01-API.md:179
+CONTENT-CHANGED                                              docs/wiki/3.01-API.md:188-197
+SAME                                                         docs/wiki/3.02-Settings-and-Preferences.md:218
+SAME                                                         e2e/tests/sync/supersync-agent-capture.spec.ts:33-48
+NEW                                                          e2e/tests/sync/supersync-agent-read.spec.ts:181-193
+SAME                                                         electron/mcp/mcp-tool-kit.ts:154-181
+SAME                                                         electron/mcp/mcp-tools.ts:82
+SAME                                                         electron/shared-with-frontend/assistant-access.model.ts:9-13
+SAME                                                         src/app/util/get-db-date-str.ts:17-39
+CONTENT-CHANGED                                              src/app/features/config/global-config.model.ts:236-270
+SAME                                                         src/app/features/config/store/global-config.reducer.ts:190-192
+SAME                                                         src/app/features/tasks/util/is-task-overdue.ts:10
+SAME                                                         src/app/op-log/validation/is-valid-entity-id.ts:8-12
+SAME                                                         src/app/root-store/meta/task-shared-meta-reducers/lww-update.meta-reducer.ts:683
+SAME                                                         src/app/root-store/meta/task-shared-meta-reducers/lww-update.meta-reducer.ts:683-700
+UNRESOLVED (ambiguous: 2 files)                              mcp-protocol.ts:55-73
+UNRESOLVED (ambiguous: 2 files)                              mcp-protocol.ts:55-82
+SAME                                                         packages/super-sync-server/src/migration-status.ts:38-44
+SAME                                                         packages/plugin-api/src/types.ts:403
+SAME                                                         packages/super-sync-server/docs/backup-and-recovery.md:128-131
+CONTENT-CHANGED                                              packages/super-sync-server/src/capture/capture-key.store.ts:56-69
+CONTENT-CHANGED                                              packages/super-sync-server/src/capture/capture-mcp.routes.ts:50-55
+SAME                                                         packages/super-sync-server/src/capture/capture-queue.store.ts:166
+NEW                                                          packages/super-sync-server/src/capture/capture-read.tools.ts:158-169
+SAME                                                         packages/super-sync-server/src/capture/capture.routes.ts:95
+SAME                                                         packages/super-sync-server/src/capture/capture.routes.ts:176-186
+SAME                                                         packages/super-sync-server/src/capture/capture.routes.ts:186
+SAME                                                         packages/super-sync-server/src/capture/create-task.tool.ts:25
+SAME                                                         packages/super-sync-server/src/capture/mcp-protocol.ts:55-73
+SAME                                                         packages/super-sync-server/src/capture/mcp-protocol.ts:210-219
+SAME                                                         packages/super-sync-server/src/server.ts:523-539
+SAME                                                         packages/super-sync-server/src/sync/op-replay.ts:161
+CONTENT-CHANGED                                              packages/super-sync-server/templates/privacy.template.html:126-128
+CONTENT-CHANGED                                              packages/super-sync-server/templates/privacy.template.html:268-336
+CONTENT-CHANGED                                              packages/super-sync-server/tests/capture-oauth.pglite.spec.ts:215-218
+SAME                                                         packages/super-sync-server/tests/capture-routes.pglite.spec.ts:145-148
+SAME                                                         packages/super-sync-server/tests/migration-sql.spec.ts:657-672
+MOVED -> 557                                                 packages/sync-providers/src/super-sync/super-sync.ts:553-700
+MOVED (17 candidates, nearest 567)                           packages/sync-providers/src/super-sync/super-sync.ts:563
+MOVED -> 591                                                 packages/sync-providers/src/super-sync/super-sync.ts:587-592
+SAME                                                         src/app/features/planner/store/planner-carry-over.util.ts:25-43
+SAME                                                         src/app/features/planner/store/planner-carry-over.util.ts:31-37
+SAME                                                         src/app/features/planner/store/planner.selectors.ts:210
+SAME                                                         src/app/op-log/sync-providers/provider-manager.service.ts:340-357
+SAME                                                         packages/super-sync-server/scripts/health-alert.sh:146
+SAME                                                         packages/super-sync-server/src/server.ts:433-436
+SAME                                                         packages/super-sync-server/src/server.ts:523-539
+MOVED -> 295                                                 src/app/app.component.ts:293
+SAME                                                         src/app/core/date/date.service.ts:46-54
+SAME                                                         src/app/features/config/global-config.model.ts:266
+SAME                                                         src/app/features/planner/store/planner-carry-over.util.ts:25-43
+CONTENT-CHANGED                                              src/app/features/tasks/agent-capture/agent-capture-settings/agent-capture-settings.component.html:22-41
+MOVED -> 28                                                  src/app/features/tasks/agent-capture/agent-capture-settings/agent-capture-settings.component.html:25-41
+MOVED -> 30                                                  src/app/features/tasks/agent-capture/agent-capture-settings/agent-capture-settings.component.html:27-32
+SAME                                                         src/app/features/tasks/agent-capture/agent-capture.service.ts:79-99
+SAME                                                         src/app/features/tasks/agent-capture/agent-capture.service.ts:102-109
+CONTENT-CHANGED                                              src/app/features/tasks/agent-capture/agent-capture.service.ts:117-120
+MOVED -> 217                                                 src/app/features/tasks/agent-capture/agent-capture.service.ts:212-237
+SAME                                                         src/app/features/tasks/store/task.selectors.ts:526-529
+SAME                                                         src/app/features/tasks/util/is-task-overdue.ts:10
+SAME                                                         src/app/features/work-context/store/work-context.selectors.ts:346
+SAME                                                         src/app/op-log/sync-providers/provider-manager.service.ts:85
+SAME                                                         src/app/op-log/validation/validation-fn.ts:39
+SAME                                                         src/app/root-store/app-state/app-state.selectors.ts:8
+SAME                                                         src/app/util/is-today.util.ts:3
+SAME                                                         packages/super-sync-server/src/capture/capture-queue.store.ts:166
+SAME                                                         packages/super-sync-server/src/capture/capture.routes.ts:176-186
+UNRESOLVED (ambiguous: 3 files)                              super-sync.ts:553-700
+SAME                                                         e2e/tests/sync/supersync-agent-capture.spec.ts:33-97
+SAME                                                         src/app/imex/sync/sync-wrapper.service.ts:249-251
+SAME                                                         src/app/features/tasks/store/task.selectors.ts:521-558
+SAME                                                         tools/check-file.js:59-64
+SAME                                                         tools/mcp-registry/server.json:5
+SAME                                                         src/app/features/work-context/store/work-context.selectors.ts:88-93
+SAME                                                         src/app/features/work-view/work-view.component.ts:379-381
+# totals: CONTENT-CHANGED 19, MOVED 11, NEW 2, SAME 72, UNRESOLVED 4
