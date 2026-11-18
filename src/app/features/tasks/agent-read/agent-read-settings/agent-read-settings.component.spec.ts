@@ -162,22 +162,28 @@ describe('AgentReadSettingsComponent', () => {
     expect(stateLine()).toBeNull();
   });
 
-  it('shows when the list was last shared', async () => {
-    const translate = TestBed.inject(TranslateService);
-    translate.setTranslation('en', {
-      F: { SYNC: { FORM: { SUPER_SYNC: { CAPTURE_READ_STATE_ON: 'shared {{time}}' } } } },
+  for (const [key, deviceId] of [
+    ['CAPTURE_READ_STATE_ON', SERVER_ID],
+    ['CAPTURE_READ_STATE_ON_NOT_PUBLISHING', 'enable-old'],
+  ] as const) {
+    it(`shows the date and time the list was last shared (${key})`, async () => {
+      const translate = TestBed.inject(TranslateService);
+      translate.setTranslation('en', {
+        F: { SYNC: { FORM: { SUPER_SYNC: { [key]: 'shared {{time}}' } } } },
+      });
+      translate.use('en');
+      publisher.enableId.set(deviceId);
+      publisher.getAccess.and.resolveTo(SERVER_ANSWERS['publishedAtSet']);
+      await render();
+      const time = TestBed.runInInjectionContext(() => new LocaleDatePipe()).transform(
+        PUBLISHED_AT,
+        'short',
+      );
+      // PUBLISHED_AT is 12:00 local time: the value carries the time, not only the day.
+      expect(time).toContain('12:00');
+      expect(stateLine()!.textContent!.trim()).toBe(`shared ${time}`);
     });
-    translate.use('en');
-    publisher.enableId.set(SERVER_ID);
-    publisher.getAccess.and.resolveTo(SERVER_ANSWERS['publishedAtSet']);
-    await render();
-    const time = TestBed.runInInjectionContext(() => new LocaleDatePipe()).transform(
-      PUBLISHED_AT,
-      'shortDate',
-    );
-    expect(time).toBeTruthy();
-    expect(stateLine()!.textContent!.trim()).toBe(`shared ${time}`);
-  });
+  }
 
   it('switches on from the on button and shows the new server state', async () => {
     await render();

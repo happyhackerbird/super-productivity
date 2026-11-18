@@ -5,7 +5,7 @@
     class="state"
     [attr.e2e]="v.isOnLine ? 'agentReadState' : null"
   >
-    {{ v.line | translate: { time: v.time | localeDate: 'shortDate' } }}
+    {{ v.line | translate: { time: v.time | localeDate: 'short' } }}
   </p>
 }
 @if (v.hasOn || v.hasResume || v.hasStop) {

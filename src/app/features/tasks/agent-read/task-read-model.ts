@@ -108,18 +108,19 @@ const toReadTask = (
     }
   }
 
-  const tagIds = (Array.isArray(task.tagIds) ? task.tagIds : [])
+  // A tag id without a known tag is left out of both, so ids and titles pair by position.
+  const tags = (Array.isArray(task.tagIds) ? task.tagIds : [])
     .filter(isFittingId)
-    .slice(0, READ_MODEL_MAX_TAGS);
-  if (tagIds.length) {
-    readTask.tagIds = tagIds;
-    const titles = tagIds
-      .map((tagId) => tagTitles.get(tagId))
-      .filter((title): title is string => typeof title === 'string')
-      .map((title) => cutCodePoints(title, READ_MODEL_NAME_MAX_CHARS));
-    if (titles.length) {
-      readTask.tagTitles = titles;
-    }
+    .slice(0, READ_MODEL_MAX_TAGS)
+    .flatMap((tagId) => {
+      const title = tagTitles.get(tagId);
+      return typeof title === 'string' ? [{ tagId, title }] : [];
+    });
+  if (tags.length) {
+    readTask.tagIds = tags.map(({ tagId }) => tagId);
+    readTask.tagTitles = tags.map(({ title }) =>
+      cutCodePoints(title, READ_MODEL_NAME_MAX_CHARS),
+    );
   }
 
   if (isFittingId(task.parentId)) {

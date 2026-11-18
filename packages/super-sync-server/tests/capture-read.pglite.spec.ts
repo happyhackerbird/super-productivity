@@ -532,6 +532,136 @@ describe('task reading (PGlite)', () => {
     });
   });
 
+  describe('two accounts', () => {
+    interface Account {
+      id: number;
+      jwt: string;
+      token: string;
+      enableId: string;
+      publishedAt: number;
+    }
+    interface Row {
+      enable_id: string;
+      payload: string | null;
+      published_at: unknown;
+    }
+
+    let a: Account;
+    let b: Account;
+
+    const rowOf = async (id: number): Promise<Row | null> =>
+      (
+        await db.query<Row>(
+          'SELECT enable_id, payload, published_at FROM capture_read_models WHERE user_id = $1',
+          [id],
+        )
+      ).rows[0] ?? null;
+
+    /** A live key, a capture token, an enablement and a published list of its own. */
+    const setUpAccount = async (
+      id: number,
+      accountJwt: string,
+      title: string,
+    ): Promise<Account> => {
+      const keyRes = await api(
+        'PUT',
+        '/key',
+        { publicKey: newCaptureKeyPair().publicKey },
+        accountJwt,
+      );
+      expect(keyRes.statusCode).toBe(200);
+      const token = (
+        await api('POST', '/tokens', { clientName: 'Claude' }, accountJwt)
+      ).json().token;
+      const on = await api('PUT', '/read-access', undefined, accountJwt);
+      expect(on.statusCode).toBe(200);
+      const { enableId } = on.json();
+      const published = await api(
+        'PUT',
+        '/read-model',
+        { enableId, model: readModel(title) },
+        accountJwt,
+      );
+      expect(published.statusCode).toBe(200);
+      return {
+        id,
+        jwt: accountJwt,
+        token,
+        enableId,
+        publishedAt: published.json().publishedAt,
+      };
+    };
+
+    const accessOf = async (account: Account): Promise<unknown> =>
+      (await api('GET', '/read-access', undefined, account.jwt)).json();
+
+    const listedTitles = async (account: Account): Promise<string[]> => {
+      const { result } = (await mcp(account.token, toolCall('list_tasks', {}))).json();
+      expect(result.isError).toBeUndefined();
+      return result.structuredContent.tasks.map((task: { title: string }) => task.title);
+    };
+
+    beforeEach(async () => {
+      const otherId = await addUser(db, 'b@example.com');
+      const otherJwt = jwt.sign(
+        { userId: otherId, email: 'b@example.com', tokenVersion: 0 },
+        process.env.JWT_SECRET as string,
+      );
+      a = await setUpAccount(userId, syncJwt, 'Alpha errand');
+      b = await setUpAccount(otherId, otherJwt, 'Bravo errand');
+      expect(b.enableId).not.toBe(a.enableId);
+    });
+
+    it('shows each account only its own enablement and list', async () => {
+      expect(await accessOf(a)).toEqual({
+        enabled: true,
+        enableId: a.enableId,
+        publishedAt: a.publishedAt,
+      });
+      expect(await accessOf(b)).toEqual({
+        enabled: true,
+        enableId: b.enableId,
+        publishedAt: b.publishedAt,
+      });
+      expect(await listedTitles(a)).toEqual(['Alpha errand']);
+      expect(await listedTitles(b)).toEqual(['Bravo errand']);
+    });
+
+    it("switching reading off for one account leaves the other's row and list", async () => {
+      const othersRow = await rowOf(b.id);
+      expect(othersRow).not.toBeNull();
+      expect((await api('DELETE', '/read-access', undefined, a.jwt)).statusCode).toBe(
+        200,
+      );
+      expect(await rowOf(a.id)).toBeNull();
+      expect(await accessOf(a)).toEqual({
+        enabled: false,
+        enableId: null,
+        publishedAt: null,
+      });
+      expect(await rowOf(b.id)).toEqual(othersRow);
+      expect(await accessOf(b)).toEqual({
+        enabled: true,
+        enableId: b.enableId,
+        publishedAt: b.publishedAt,
+      });
+      expect(await listedTitles(b)).toEqual(['Bravo errand']);
+    });
+
+    it("switching capture off for one account leaves the other's row", async () => {
+      const othersRow = await rowOf(b.id);
+      expect(othersRow).not.toBeNull();
+      expect((await api('DELETE', '/key', undefined, a.jwt)).statusCode).toBe(200);
+      expect(await rowOf(a.id)).toBeNull();
+      expect(await rowOf(b.id)).toEqual(othersRow);
+      expect(await accessOf(b)).toEqual({
+        enabled: true,
+        enableId: b.enableId,
+        publishedAt: b.publishedAt,
+      });
+    });
+  });
+
   describe('restore procedure (docs/backup-and-recovery.md)', () => {
     // The statement exactly as the document prints it for the shell.
     const restoreStatement = (): string => {

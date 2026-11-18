@@ -163,7 +163,7 @@ describe('buildTaskReadModel', () => {
       title: 'Write',
       projectId: 'p1',
       projectTitle: 'Home',
-      tagIds: ['tag1', 'missing', 'tag2'],
+      tagIds: ['tag1', 'tag2'],
       tagTitles: ['Urgent', 'Calls'],
       dueDay: '2026-11-20',
       plannedDay: '2026-11-20',
@@ -217,17 +217,31 @@ describe('buildTaskReadModel', () => {
   it('drops a task with an over-long id and omits over-long references', () => {
     const longId = 'x'.repeat(READ_MODEL_ID_MAX_CHARS + 1);
     const maxId = 'y'.repeat(READ_MODEL_ID_MAX_CHARS);
-    const model = build([
-      createTask({ id: longId }),
-      createTask({
-        id: maxId,
-        projectId: longId,
-        parentId: longId,
-        tagIds: [longId, 'ok'],
-      }),
-    ]);
+    const model = build(
+      [
+        createTask({ id: longId }),
+        createTask({
+          id: maxId,
+          projectId: longId,
+          parentId: longId,
+          tagIds: [longId, 'ok'],
+        }),
+      ],
+      // Both tags known: the over-long id is left out for its length alone.
+      {
+        tags: [
+          { id: longId, title: 'Long' },
+          { id: 'ok', title: 'OK' },
+        ],
+      },
+    );
     expect(ids(model)).toEqual([maxId]);
-    expect(model.tasks[0]).toEqual({ id: maxId, title: 'DEFAULT', tagIds: ['ok'] });
+    expect(model.tasks[0]).toEqual({
+      id: maxId,
+      title: 'DEFAULT',
+      tagIds: ['ok'],
+      tagTitles: ['OK'],
+    });
   });
 
   it('cuts tags to 50 and titles by code point', () => {
@@ -383,5 +397,9 @@ describe('buildTaskReadModel', () => {
     expect(model.tasks.length).toBeGreaterThan(0);
     expect(model.truncated).toBeTrue();
     expectWithinWireLimits(model);
+    // Tag ids and titles pair by position.
+    model.tasks.forEach((task) =>
+      expect(task.tagTitles?.length ?? 0).toBe(task.tagIds?.length ?? 0),
+    );
   });
 });
