@@ -1,4 +1,4 @@
-# Compose projection — run 2026-11-17-assistant-read-tool, after cycle 6
+# Compose projection — run 2026-11-17-assistant-read-tool, after cycle 13
 
 Derived from the tracker (`2026-11-17-assistant-read-tool.md`): each decision's latest status with every still-standing clause of its amendment chain, cited by cycle. Where this file and the tracker disagree, the tracker wins and the disagreement is a finding. All paths are relative to the repository root.
 
