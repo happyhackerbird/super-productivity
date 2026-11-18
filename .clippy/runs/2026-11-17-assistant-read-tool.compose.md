@@ -197,3 +197,9 @@ Stakes: S1 task data readable without read access or by another account; S2 task
 ### D20 and D15 amendments (cycle 10)
 
 - The new race spec's path is also in the `exclude` list of `packages/super-sync-server/vitest.config.ts`, directly after the `capture-claim-race` entry, so the unit config does not collect it. That file joins the closed set of edited upstream files — twenty-seven files.
+
+### D19 amendment (cycle 11)
+
+- The switch-offs (`DELETE /api/capture/read-access`, `DELETE /api/capture/key`) are also sent as the SECOND account, with the first account's row and list asserted intact.
+- A case where the second account's capture is off (no live key) while the first account's key is live expects `PUT /api/capture/read-access` → 409 `capture_disabled` and no row for the second account.
+- Acceptance: for every `user_id` condition in `packages/super-sync-server/src/capture/capture-read.store.ts` and for the new delete in `src/capture/capture-key.store.ts`, the mutants "condition dropped", "lowest-id account instead of the caller" and "highest-id account instead of the caller" (where the statement form allows each) make the read specs fail — except four sites recorded as unable to move data across accounts (tracker F100: the read-back taking the newest row; the unchanged-list UPDATE without account and enablement; either publish UPDATE without `user_id`).
