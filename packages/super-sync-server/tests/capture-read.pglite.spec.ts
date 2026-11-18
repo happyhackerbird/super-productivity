@@ -737,6 +737,59 @@ describe('task reading (PGlite)', () => {
       expect(refused.json()).toEqual({ error: 'capture_disabled' });
       expect(await rowOf(a.id)).toBeNull();
     });
+
+    // CANDIDATE (scratch only): write_max
+    it("a new list from the first account is stored while the second's is on", async () => {
+      const othersRow = await rowOf(b.id);
+      const res = await api(
+        'PUT',
+        '/read-model',
+        { enableId: a.enableId, model: readModel('Alpha update') },
+        a.jwt,
+      );
+      expect(res.statusCode).toBe(200);
+      expect(await listedTitles(a)).toEqual(['Alpha update']);
+      expect(await rowOf(b.id)).toEqual(othersRow);
+    });
+
+    // CANDIDATE (scratch only): touch_min, touch_max
+    it('an unchanged list from either account only moves its own published_at', async () => {
+      const execute = mocked.prisma.$executeRaw as (
+        ...args: unknown[]
+      ) => Promise<number>;
+      for (const [account, other] of [
+        [a, b],
+        [b, a],
+      ] as const) {
+        const payload = (await rowOf(account.id))?.payload as string;
+        const othersRow = await rowOf(other.id);
+        const statements: string[] = [];
+        mocked.prisma.$executeRaw = async (...args: unknown[]) => {
+          statements.push((args[0] as TemplateStringsArray).join('?'));
+          return execute(...args);
+        };
+        try {
+          expect(await publishReadModel(account.id, account.enableId, payload, NOW)).toBe(
+            'published',
+          );
+        } finally {
+          mocked.prisma.$executeRaw = execute;
+        }
+        expect(statements).toHaveLength(1);
+        expect(await loadReadModel(account.id)).toEqual({ payload, publishedAt: NOW });
+        expect(await rowOf(other.id)).toEqual(othersRow);
+      }
+    });
+
+    // CANDIDATE (scratch only): readback_max, readback_newest
+    it('the first account switching on again gets its own enablement back', async () => {
+      const again = await api('PUT', '/read-access', undefined, a.jwt);
+      expect(again.json()).toEqual({
+        enabled: true,
+        enableId: a.enableId,
+        publishedAt: a.publishedAt,
+      });
+    });
   });
 
   describe('restore procedure (docs/backup-and-recovery.md)', () => {
