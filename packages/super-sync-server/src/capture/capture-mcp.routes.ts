@@ -46,6 +46,31 @@ const bearerToken = (req: FastifyRequest): string | null => {
   return header?.startsWith('Bearer ') ? header.slice('Bearer '.length).trim() : null;
 };
 
+/**
+ * Fork: one log line per /mcp request, so a client that fails before the handler
+ * (415, 401) or never calls at all is visible. Protocol fields only: the
+ * JSON-RPC method, the tool name, a grant id suffix, status, content type and
+ * user agent. Never arguments, titles or client names.
+ */
+const requestLog = new WeakMap<
+  FastifyRequest,
+  { rpc: string; tool?: string; grant?: string }
+>();
+const logToken = (value: unknown): string =>
+  typeof value === 'string' && /^[A-Za-z0-9_./-]{1,64}$/.test(value) ? value : '?';
+const logHeader = (value: string | string[] | undefined): string => {
+  const text = (headerValue(value) ?? '').replace(/[^\x20-\x7e]/g, '').slice(0, 60);
+  return text.replace(/\s+/g, '_') || '-';
+};
+const noteRequest = (req: FastifyRequest, message: unknown, grantId: string): void => {
+  const body = (message ?? {}) as { method?: unknown; params?: { name?: unknown } };
+  requestLog.set(req, {
+    rpc: logToken(body.method),
+    tool: body.method === 'tools/call' ? logToken(body.params?.name) : undefined,
+    grant: grantId.slice(-8),
+  });
+};
+
 const sendMcpReply = (reply: FastifyReply, result: McpHttpReply): FastifyReply =>
   result.body === undefined
     ? reply.code(result.status).send()
@@ -96,6 +121,7 @@ const handleMcpPost = async (
     return reply.code(429).header('Retry-After', '60').send({ error: 'rate_limited' });
   }
   await touchCaptureGrant(grant.grantId);
+  noteRequest(req, undefined, grant.grantId);
 
   if (!isAcceptedProtocolHeader(headerValue(req.headers['mcp-protocol-version']))) {
     return sendMcpReply(reply, unsupportedVersionReply());
@@ -106,6 +132,7 @@ const handleMcpPost = async (
   } catch {
     return sendMcpReply(reply, parseErrorReply());
   }
+  noteRequest(req, message, grant.grantId);
   const result = await handleMcpMessage(
     message,
     { mcpMethod: headerValue(req.headers['mcp-method']) },
@@ -134,6 +161,21 @@ export const captureMcpRoutes = async (
     { parseAs: 'string', bodyLimit: CAPTURE_MCP_BODY_LIMIT_BYTES },
     (_req, body, done) => done(null, body),
   );
+
+  // Encapsulated like the parser: fires for this plugin's routes only, after
+  // every response, including a 415 from the parser and a 401.
+  fastify.addHook('onResponse', async (req, reply) => {
+    const noted = requestLog.get(req);
+    Logger.info(
+      `MCP ${req.method} ${reply.statusCode}` +
+        ` ct=${logHeader(req.headers['content-type'])}` +
+        ` pv=${logHeader(req.headers['mcp-protocol-version'])}` +
+        ` ua=${logHeader(req.headers['user-agent'])}` +
+        (noted
+          ? ` rpc=${noted.rpc}${noted.tool ? ` tool=${noted.tool}` : ''} grant=${noted.grant}`
+          : ''),
+    );
+  });
 
   // The global per-IP limiter is off here: assistant vendors call from shared
   // egress IPs. capture-rate-limit.ts counts per grant and failed auths per IP.
