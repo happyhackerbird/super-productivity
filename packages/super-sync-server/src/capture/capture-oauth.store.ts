@@ -199,16 +199,18 @@ export const exchangeCaptureAuthorization = async (
     await tx.$executeRaw`DELETE FROM capture_auth WHERE code_hash = ${codeHash}`;
     const grantId = uuidv7();
     const refresh = newRefreshSecret(signingKey, grantId);
-    const offline = auth.scope.split(' ').includes('offline_access');
+    // Fork: every grant gets a refresh token, offline_access requested or not.
+    // ChatGPT asks only for tasks:capture, and its connection otherwise died
+    // with the one-hour access token.
     const expiresAt = now + ACCESS_TTL_MS;
     await tx.$executeRaw`
     INSERT INTO capture_grants (id, user_id, kind, client_name, secret_hash, created_at,
       expires_at, client_id, resource, refresh_hash, refresh_expires_at)
     VALUES (${grantId}, ${candidate.user_id}, 'oauth', ${auth.client_name},
       ${oauthAccessHash(signingKey, grantId, refresh)}, ${BigInt(now)}, ${BigInt(expiresAt)},
-      ${auth.client_id}, ${auth.resource}, ${offline ? hashCaptureSecret(refresh) : null},
-      ${offline ? BigInt(now + REFRESH_TTL_MS) : null})`;
-    return oauthTokenPair(signingKey, grantId, refresh, expiresAt, now, offline);
+      ${auth.client_id}, ${auth.resource}, ${hashCaptureSecret(refresh)},
+      ${BigInt(now + REFRESH_TTL_MS)})`;
+    return oauthTokenPair(signingKey, grantId, refresh, expiresAt, now, true);
   });
 
 interface RefreshRow {

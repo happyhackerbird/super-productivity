@@ -480,9 +480,16 @@ describe('capture OAuth (real routes and SQL)', () => {
     );
   });
 
-  it('does not issue a refresh token without offline_access', async () => {
+  // Fork: ChatGPT asks only for tasks:capture. Without a refresh token its
+  // connection died after one hour (live grant, 2026-11-20), so every OAuth
+  // grant gets one.
+  it('issues a working refresh token without offline_access', async () => {
     const result = await exchange(await authorizationCode({ scope: 'tasks:capture' }));
-    expect(result.json().refresh_token).toBeUndefined();
+    const first = result.json<{ refresh_token?: string }>();
+    expect(first.refresh_token).toBeDefined();
+    const refreshed = await refresh(first.refresh_token!);
+    expect(refreshed.statusCode).toBe(200);
+    expect(refreshed.json().refresh_token).toBeDefined();
   });
 
   it.each(['signout', 'disable', 'revoke'])(

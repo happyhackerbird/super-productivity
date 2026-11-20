@@ -137,7 +137,7 @@ export const captureOAuthRoutes = async (
   const metadata = {
     resource,
     authorization_servers: [publicUrl],
-    scopes_supported: ['tasks:capture'],
+    scopes_supported: ['tasks:capture', 'offline_access'],
     bearer_methods_supported: ['header'],
     resource_name: 'Super Productivity task capture',
   };
