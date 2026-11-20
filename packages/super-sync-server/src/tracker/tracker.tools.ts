@@ -7,7 +7,9 @@ import {
   McpToolResult,
 } from '../capture/mcp-protocol';
 import { TRACKER_DEFAULT_TIME_ZONE, TRACKER_GET_MAX_TASKS } from './tracker.const';
+import { DEFAULT_TRACKER_ACTIVITIES } from './tracker-activities';
 import {
+  ActivitySchema,
   PILLARS,
   resolveDay,
   todayIn,
@@ -23,8 +25,8 @@ import {
 } from './tracker.store';
 
 /**
- * The seven tracker tools of `/mcp` (fork): the personal tracker, a daily task
- * list and goals by period, kept as one JSON document per account. Separate
+ * The tracker tools of `/mcp` (fork): the personal tracker, a reusable activity
+ * catalog, daily task instances and goals, kept as one JSON document per account. Separate
  * from Super Productivity's own tasks. Every write goes through
  * `mutateTrackerDoc`, so it merges into the current document and never replaces
  * what the tracker page stored there.
@@ -43,8 +45,8 @@ const INTRO = TRACKER_NAME
   ? `the ${TRACKER_NAME} (the user's personal tracker), separate from Super Productivity tasks`
   : 'the personal tracker, separate from Super Productivity tasks';
 const LISTS =
-  "It has today's tasks (tasks whose day is today), a general task list (open tasks on other days or with no day), " +
-  'goals by period, and XP the user earns for completed tasks.';
+  "It has today's tasks (tasks whose day is today), other dated or undated task instances, " +
+  'a reusable activity catalog (the general list), goals by period, and earned XP.';
 const DAY_PATTERN = '^\\d{4}-\\d{2}-\\d{2}$';
 
 const NO_TASK_TEXT = 'No tracker task with that id; call tracker_get for ids.';
@@ -97,7 +99,7 @@ export const TRACKER_TOOLS: McpToolDefinition[] = [
   tool(
     'tracker_get',
     'Get tracker',
-    `Reads ${INTRO}. ${LISTS} Returns goals and tasks, with the tracker's "today" and time zone. ` +
+    `Reads ${INTRO}. ${LISTS} Returns activities (including archived definitions), goals and tasks, with the tracker's "today" and time zone. ` +
       'By default returns open tasks plus all tasks scheduled for today; set includeDone for all. ' +
       `Today's tasks come first, then dated tasks by day, then undated ones; at most ${TRACKER_GET_MAX_TASKS} tasks, "truncated" means more exist.`,
     {
@@ -112,7 +114,7 @@ export const TRACKER_TOOLS: McpToolDefinition[] = [
   tool(
     'tracker_add_task',
     'Add tracker task',
-    `Adds a task to ${INTRO}. ${LISTS} day "today" (the default) puts it on today's tasks; "" puts it on the general task list without a day; a date or "tomorrow" schedules it.`,
+    `Adds a task instance to ${INTRO}. ${LISTS} day "today" (the default) puts it on today's tasks; "" creates an undated task instance; a date or "tomorrow" schedules it. Does not edit the reusable activity catalog.`,
     {
       title: { type: 'string', minLength: 1, maxLength: 150, description: 'Task title.' },
       day: {
@@ -126,7 +128,7 @@ export const TRACKER_TOOLS: McpToolDefinition[] = [
   tool(
     'tracker_update_task',
     'Update tracker task',
-    `Changes a task of ${INTRO}; give at least one field besides id. Changing day moves it between today's tasks and the general task list. Setting done ticks it off and records today's date as the day it was done; the tracker awards the task's XP when its page next opens. Ids come from tracker_get.`,
+    `Changes a task instance of ${INTRO}; give at least one field besides id. Changing day reschedules it or leaves it undated; it does not edit the reusable activity catalog/general list. Setting done ticks it off and records today's date as the day it was done; the tracker awards the task's XP when its page next opens. Ids come from tracker_get.`,
     {
       id: { type: 'string', description: 'The task id.' },
       title: { type: 'string', minLength: 1, maxLength: 150 },
@@ -181,6 +183,38 @@ export const TRACKER_TOOLS: McpToolDefinition[] = [
     ['id'],
     { destructiveHint: true },
   ),
+  tool(
+    'tracker_add_activity',
+    'Add reusable tracker activity',
+    `Adds a reusable activity definition to the catalog/general list of ${INTRO}, offered for logging wins and creating tasks. Does not create or change daily or undated task instances, goals, or historical XP.`,
+    {
+      label: { type: 'string', minLength: 1, maxLength: 150 },
+      pillar: PILLAR_PROP,
+      xp: { type: 'integer', minimum: 0, maximum: 250 },
+    },
+    ['label', 'pillar', 'xp'],
+  ),
+  tool(
+    'tracker_update_activity',
+    'Update reusable tracker activity',
+    `Updates a reusable activity definition in the catalog/general list of ${INTRO}; give at least one field besides id. archived hides it from choices; archived:false restores it. Does not change task instances, goals, entries, or previously earned XP. Ids come from tracker_get.`,
+    {
+      id: { type: 'string' },
+      label: { type: 'string', minLength: 1, maxLength: 150 },
+      pillar: PILLAR_PROP,
+      xp: { type: 'integer', minimum: 0, maximum: 250 },
+      archived: { type: 'boolean' },
+    },
+    ['id'],
+  ),
+  tool(
+    'tracker_delete_activity',
+    'Archive reusable tracker activity',
+    `Archives a reusable activity in the catalog/general list of ${INTRO}. Retains its definition for history; does not delete task instances, goals, entries, or earned XP. Restore with tracker_update_activity archived:false.`,
+    { id: { type: 'string' } },
+    ['id'],
+    { idempotentHint: true },
+  ),
 ];
 
 export const isTrackerTool = (name: string): boolean =>
@@ -217,8 +251,17 @@ const UpdateGoalArgs = z.strictObject({
   text: z.string().min(1).max(300).optional(),
   done: z.boolean().optional(),
 });
+const AddActivityArgs = ActivitySchema.pick({
+  label: true,
+  pillar: true,
+  xp: true,
+}).strict();
+const UpdateActivityArgs = AddActivityArgs.partial().extend({
+  id: IdSchema,
+  archived: z.boolean().optional(),
+});
 
-const newId = (prefix: 'task' | 'goal', now: number): string => {
+const newId = (prefix: 'task' | 'goal' | 'activity', now: number): string => {
   const alphabet = 'abcdefghijklmnopqrstuvwxyz0123456789';
   const suffix = Array.from({ length: 6 }, () => alphabet[randomInt(alphabet.length)]);
   return `${prefix}_${now.toString(36)}_${suffix.join('')}`;
@@ -270,6 +313,7 @@ const runGet = async (
     version,
     goals: (doc?.goals ?? []).map(publicGoal),
     tasks: tasks.slice(0, TRACKER_GET_MAX_TASKS).map(publicTask),
+    activities: doc?.activities ?? DEFAULT_TRACKER_ACTIVITIES,
     truncated: tasks.length > TRACKER_GET_MAX_TASKS,
   });
 };
@@ -304,6 +348,48 @@ const runWrite = async (
   args: Record<string, unknown>,
 ): Promise<McpToolResult> => {
   switch (name) {
+    case 'tracker_add_activity': {
+      const parsed = AddActivityArgs.safeParse(args);
+      if (!parsed.success) return invalidArguments(parsed.error);
+      const { result } = await mutateTrackerDoc(grant.userId, (doc) => {
+        const activities = (doc.activities ??= structuredClone(
+          DEFAULT_TRACKER_ACTIVITIES,
+        ));
+        const activity = { id: newId('activity', Date.now()), ...parsed.data };
+        activities.push(activity);
+        return activity;
+      });
+      return ok({ activity: result });
+    }
+    case 'tracker_update_activity':
+    case 'tracker_delete_activity': {
+      const deleteArgs =
+        name === 'tracker_delete_activity' ? IdArgs.safeParse(args) : null;
+      if (deleteArgs && !deleteArgs.success) return invalidArguments(deleteArgs.error);
+      const parsed = deleteArgs?.success
+        ? UpdateActivityArgs.safeParse({ ...deleteArgs.data, archived: true })
+        : UpdateActivityArgs.safeParse(args);
+      if (!parsed.success) return invalidArguments(parsed.error);
+      const { id, ...changes } = parsed.data;
+      if (Object.values(changes).every((value) => value === undefined)) {
+        return fail('Invalid arguments: give at least one field to change besides id.');
+      }
+      const { result } = await mutateTrackerDoc(grant.userId, (doc) => {
+        const activities = (doc.activities ??= structuredClone(
+          DEFAULT_TRACKER_ACTIVITIES,
+        ));
+        const activity = activities.find((candidate) => candidate.id === id);
+        if (!activity)
+          throw new TrackerToolError(
+            'No tracker activity with that id; call tracker_get for ids.',
+          );
+        Object.assign(activity, changes);
+        return activity;
+      });
+      return name === 'tracker_delete_activity'
+        ? ok({ deleted: id })
+        : ok({ activity: result });
+    }
     case 'tracker_add_task': {
       const parsed = AddTaskArgs.safeParse(args);
       if (!parsed.success) return invalidArguments(parsed.error);

@@ -29,6 +29,20 @@ export const isValidTimeZone = (timeZone: string): boolean => {
 
 const PillarSchema = z.enum(PILLARS);
 
+export const ActivitySchema = z.looseObject({
+  id: z
+    .string()
+    .min(1)
+    .max(100)
+    .refine((id) => id !== 'custom' && id !== 'wake', 'Reserved activity id'),
+  label: z.string().trim().min(1).max(150),
+  pillar: PillarSchema,
+  xp: z.number().int().min(0).max(250),
+  archived: z.boolean().optional(),
+});
+
+export type TrackerActivity = z.infer<typeof ActivitySchema>;
+
 export const GoalSchema = z.looseObject({
   id: z.string().min(1).max(100),
   period: z.string().min(1).max(100),
@@ -60,9 +74,10 @@ export const TrackerDocSchema = z
     timeZone: z.string().refine(isValidTimeZone, 'Unknown time zone').optional(),
     goals: z.array(GoalSchema).max(TRACKER_MAX_GOALS).optional(),
     tasks: z.array(TaskSchema).max(TRACKER_MAX_TASKS).optional(),
+    activities: z.array(ActivitySchema).max(1000).optional(),
   })
   .check((ctx) => {
-    for (const key of ['goals', 'tasks'] as const) {
+    for (const key of ['goals', 'tasks', 'activities'] as const) {
       const index = duplicateIds(ctx.value[key]);
       if (index !== null) {
         ctx.issues.push({

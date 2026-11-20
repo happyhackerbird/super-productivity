@@ -80,6 +80,13 @@ export const trackerRoutes = async (
           ? reply.code(413).send({ error: 'too_large' })
           : invalid(reply, checked.issues);
       }
+      const current = await loadTrackerDoc(grant.userId);
+      if (current.doc?.activities !== undefined && checked.doc.activities === undefined) {
+        return reply.code(400).send({
+          error: 'reload_required',
+          message: 'Reload the tracker page before saving activity changes.',
+        });
+      }
       const saved = await saveTrackerDoc(
         grant.userId,
         checked.doc,

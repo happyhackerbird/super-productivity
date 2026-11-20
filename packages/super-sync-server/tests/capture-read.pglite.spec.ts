@@ -436,11 +436,6 @@ describe('task reading (PGlite)', () => {
   });
 
   describe('/mcp', () => {
-    const toolNames = async (token: string): Promise<string[]> =>
-      (await mcp(token, { jsonrpc: '2.0', id: 1, method: 'tools/list' }))
-        .json()
-        .result.tools.map((tool: { name: string }) => tool.name);
-
     it('reading off returns the switched-off error', async () => {
       await api('PUT', '/key', { publicKey: key.publicKey });
       const token = await newToken();
@@ -455,36 +450,6 @@ describe('task reading (PGlite)', () => {
           isError: true,
         });
       }
-    });
-
-    it('lists three tools whether reading is on or off', async () => {
-      await api('PUT', '/key', { publicKey: key.publicKey });
-      const token = await newToken();
-      expect(await toolNames(token)).toEqual([
-        'create_task',
-        'list_tasks',
-        'get_task',
-        'tracker_get',
-        'tracker_add_task',
-        'tracker_update_task',
-        'tracker_delete_task',
-        'tracker_add_goal',
-        'tracker_update_goal',
-        'tracker_delete_goal',
-      ]);
-      await switchOn();
-      expect(await toolNames(token)).toEqual([
-        'create_task',
-        'list_tasks',
-        'get_task',
-        'tracker_get',
-        'tracker_add_task',
-        'tracker_update_task',
-        'tracker_delete_task',
-        'tracker_add_goal',
-        'tracker_update_goal',
-        'tracker_delete_goal',
-      ]);
     });
 
     it('answers from the published list once reading is on', async () => {

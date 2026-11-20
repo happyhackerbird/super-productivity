@@ -15,14 +15,44 @@ and reads `TRACKER_NAME` for the tool descriptions; previous override
 
 - One JSON document per account in `tracker_documents` (migration
   `20261120000000_add_tracker_documents`), changed with optimistic versions.
-- Seven MCP tools on `/mcp` next to the capture tools: `tracker_get`,
+- Ten tracker MCP tools on `/mcp` next to the three capture tools: `tracker_get`,
   `tracker_add_task`, `tracker_update_task`, `tracker_delete_task`,
-  `tracker_add_goal`, `tracker_update_goal`, `tracker_delete_goal`. Any capture
-  credential of the account may use them; there is no separate switch.
+  `tracker_add_goal`, `tracker_update_goal`, `tracker_delete_goal`,
+  `tracker_add_activity`, `tracker_update_activity`, `tracker_delete_activity`.
+  Any capture credential of the account may use them; there is no separate switch.
 - `GET`/`PUT /api/tracker` and `POST`/`DELETE /api/tracker/session` for the page.
   The session cookie holds a capture token; writes need `X-Tracker-Request: 1`.
 - `/tracker/` serves a sign-in shell, or, with a valid cookie, the page from
   `TRACKER_PAGE_DIR`. The page is not in this repository.
+
+## Reusable general list
+
+The general list is the activity catalog shared by **Log a win** and
+**Add from the list**. It is not today's tasks or the earlier/undated task
+instances. `tracker_get.activities` returns definitions, including archived ones.
+
+| Tool                      | Arguments                                             | Effect                                                          |
+| ------------------------- | ----------------------------------------------------- | --------------------------------------------------------------- |
+| `tracker_add_activity`    | `label`, `pillar`, `xp`                               | Adds a reusable option; creates no daily task.                  |
+| `tracker_update_activity` | `id`, then any of `label`, `pillar`, `xp`, `archived` | Edits the option; `archived: false` restores it.                |
+| `tracker_delete_activity` | `id`                                                  | Archives the option without deleting its historical definition. |
+
+Pillars are `credibility`, `visibility`, and `access`; XP is an integer from
+0 to 250. Labels are 1–150 characters. The document accepts up to 1,000
+definitions with unique IDs; `custom` and `wake` remain internal kinds.
+Catalog changes do not rewrite task instances, goals, wins, or previously earned XP.
+The page refreshes remote changes on focus or its normal refresh tick.
+
+The optional document field `activities` defaults to the existing catalog plus
+`learn` (**Watched and learned from content**, 15 XP) and `network`
+(**Attend an event and purposefully network**, 15 XP). The older `event` kind
+keeps its historical 35 XP/two-connections meaning and stays archived.
+An explicitly empty catalog stays empty. No database migration is required.
+
+Deploy the server image and both page files together, then reload existing tabs.
+Once a catalog is stored, an old page that omits it on `PUT /api/tracker`
+receives HTTP 400 `reload_required`, preventing it from erasing catalog/history.
+Refresh the assistant connector's tool list to discover the three new tools.
 
 ## Server layout (Contabo, `/root/supersync`)
 
@@ -46,7 +76,7 @@ The page files live in `/root/supersync/tracker-page/` (`index.html`,
 
 Build, transfer, migrate-then-swap and verification follow
 [supersync-fork-image.md](supersync-fork-image.md) sections 4–7, with the image
-tag above. After this change `tools/list` returns ten names, not three.
+revision being deployed. The current tool definitions return thirteen names.
 
 ## Verified at deploy (2026-11-20)
 
