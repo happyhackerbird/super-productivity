@@ -3,6 +3,10 @@
 For the operator and any session that deploys or rolls back the fork's tracker
 feature. Deployed on 2026-11-20 as image `supersync-fork:ct-20261120a`, built from
 the working tree that became the `career-tracker` branch commit adding this file.
+Replaced the same day by `supersync-fork:0ae7861756`, which also gives every
+OAuth grant a refresh token (ChatGPT requests only `tasks:capture` and was cut
+off after one hour); the override before that swap is
+`docker-compose.fork.yml.ct-20261120a.bak`.
 
 ## What it is
 
@@ -24,7 +28,7 @@ the working tree that became the `career-tracker` branch commit adding this file
 ```yaml
 services:
   supersync:
-    image: supersync-fork:ct-20261120a
+    image: supersync-fork:0ae7861756
     environment:
       TRACKER_PAGE_DIR: /app/tracker-page
     volumes:
