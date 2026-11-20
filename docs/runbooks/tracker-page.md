@@ -6,7 +6,10 @@ the working tree that became the `career-tracker` branch commit adding this file
 Replaced the same day by `supersync-fork:0ae7861756`, which also gives every
 OAuth grant a refresh token (ChatGPT requests only `tasks:capture` and was cut
 off after one hour); the override before that swap is
-`docker-compose.fork.yml.ct-20261120a.bak`.
+`docker-compose.fork.yml.ct-20261120a.bak`. Then by `supersync-fork:91c41992b0`,
+which logs one line per `/mcp` request (`docker logs supersync 2>&1 | grep "MCP "`)
+and reads `TRACKER_NAME` for the tool descriptions; previous override
+`docker-compose.fork.yml.0ae7861756.bak`.
 
 ## What it is
 
@@ -28,9 +31,10 @@ off after one hour); the override before that swap is
 ```yaml
 services:
   supersync:
-    image: supersync-fork:0ae7861756
+    image: supersync-fork:91c41992b0
     environment:
       TRACKER_PAGE_DIR: /app/tracker-page
+      TRACKER_NAME: <what the user calls the tracker> # optional
     volumes:
       - ./tracker-page:/app/tracker-page:ro
 ```
