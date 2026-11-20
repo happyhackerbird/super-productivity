@@ -4,6 +4,7 @@ import {
   CAPTURE_MCP_AUTH_FAILURES_PER_MINUTE,
   CAPTURE_MCP_CALLS_PER_MINUTE,
 } from './capture.const';
+import { TRACKER_CALLS_PER_MINUTE } from '../tracker/tracker.const';
 
 /**
  * Limits for /mcp. The global per-IP limiter is off for /mcp because
@@ -51,6 +52,17 @@ export const isGrantRateLimited = (
 ): boolean => {
   const key = `grant:${grantId}`;
   if (isOverLimit(key, CAPTURE_MCP_CALLS_PER_MINUTE, now)) return true;
+  count(key, now);
+  return false;
+};
+
+/** Fixed one-minute window per grant for the tracker's REST routes. */
+export const isTrackerRateLimited = (
+  grantId: string,
+  now: number = Date.now(),
+): boolean => {
+  const key = `tracker:${grantId}`;
+  if (isOverLimit(key, TRACKER_CALLS_PER_MINUTE, now)) return true;
   count(key, now);
   return false;
 };

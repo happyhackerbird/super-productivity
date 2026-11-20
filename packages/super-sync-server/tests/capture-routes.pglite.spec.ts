@@ -148,6 +148,13 @@ describe('capture routes (PGlite)', () => {
       'create_task',
       'list_tasks',
       'get_task',
+      'tracker_get',
+      'tracker_add_task',
+      'tracker_update_task',
+      'tracker_delete_task',
+      'tracker_add_goal',
+      'tracker_update_goal',
+      'tracker_delete_goal',
     ]);
     // The connector directories require a title and every hint, explicitly.
     expect(list.json().result.tools[0]).toMatchObject({

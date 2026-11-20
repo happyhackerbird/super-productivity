@@ -183,6 +183,12 @@ export interface ServerConfig {
    * in. Set CAPTURE_CONNECTOR_ENABLED=true.
    */
   captureConnectorEnabled: boolean;
+  /**
+   * Directory holding the personal tracker page (index.html and its .js/.css
+   * files), served at /tracker/ after sign-in. Needs the capture connector.
+   * Unset: the sign-in shell works, but no page is installed.
+   */
+  trackerPageDir?: string;
   captureOAuthClients: CaptureOAuthClient[];
   /**
    * A reusable consent-page code for connector directory reviewers, bound to
@@ -304,6 +310,9 @@ export const loadConfigFromEnv = (
   }
   if (process.env.CAPTURE_CONNECTOR_ENABLED !== undefined) {
     config.captureConnectorEnabled = process.env.CAPTURE_CONNECTOR_ENABLED === 'true';
+  }
+  if (process.env.TRACKER_PAGE_DIR) {
+    config.trackerPageDir = process.env.TRACKER_PAGE_DIR;
   }
   const captureReview = parseCaptureReviewAccess(
     process.env.CAPTURE_REVIEW_EMAIL,

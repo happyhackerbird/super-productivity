@@ -193,7 +193,18 @@ test.describe('@supersync Agent task reading', () => {
     await waitForTask(a.page, echo);
 
     const token = await createTokenInSettings(a);
-    expect(await listToolNames(token)).toEqual(['create_task', 'list_tasks', 'get_task']);
+    expect(await listToolNames(token)).toEqual([
+      'create_task',
+      'list_tasks',
+      'get_task',
+      'tracker_get',
+      'tracker_add_task',
+      'tracker_update_task',
+      'tracker_delete_task',
+      'tracker_add_goal',
+      'tracker_update_goal',
+      'tracker_delete_goal',
+    ]);
     await expectReadingSwitchedOff(token);
 
     await switchReadingOn(a);

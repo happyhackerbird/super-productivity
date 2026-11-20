@@ -460,9 +460,31 @@ describe('task reading (PGlite)', () => {
     it('lists three tools whether reading is on or off', async () => {
       await api('PUT', '/key', { publicKey: key.publicKey });
       const token = await newToken();
-      expect(await toolNames(token)).toEqual(['create_task', 'list_tasks', 'get_task']);
+      expect(await toolNames(token)).toEqual([
+        'create_task',
+        'list_tasks',
+        'get_task',
+        'tracker_get',
+        'tracker_add_task',
+        'tracker_update_task',
+        'tracker_delete_task',
+        'tracker_add_goal',
+        'tracker_update_goal',
+        'tracker_delete_goal',
+      ]);
       await switchOn();
-      expect(await toolNames(token)).toEqual(['create_task', 'list_tasks', 'get_task']);
+      expect(await toolNames(token)).toEqual([
+        'create_task',
+        'list_tasks',
+        'get_task',
+        'tracker_get',
+        'tracker_add_task',
+        'tracker_update_task',
+        'tracker_delete_task',
+        'tracker_add_goal',
+        'tracker_update_goal',
+        'tracker_delete_goal',
+      ]);
     });
 
     it('answers from the published list once reading is on', async () => {

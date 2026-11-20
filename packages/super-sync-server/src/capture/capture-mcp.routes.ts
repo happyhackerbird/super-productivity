@@ -15,6 +15,7 @@ import {
 import { parseCaptureToken } from './capture-token';
 import { CREATE_TASK_TOOL, runCreateTask } from './create-task.tool';
 import { READ_TOOLS, runReadTool } from './capture-read.tools';
+import { isTrackerTool, runTrackerTool, TRACKER_TOOLS } from '../tracker/tracker.tools';
 import {
   handleMcpMessage,
   isAcceptedProtocolHeader,
@@ -52,13 +53,17 @@ const sendMcpReply = (reply: FastifyReply, result: McpHttpReply): FastifyReply =
 
 const contextFor = (grant: AuthenticatedGrant): McpServerContext => ({
   serverVersion: MCP_SERVER_VERSION,
-  listTools: () => [CREATE_TASK_TOOL, ...READ_TOOLS],
+  listTools: () => [CREATE_TASK_TOOL, ...READ_TOOLS, ...TRACKER_TOOLS],
   hasTool: (name) =>
-    name === CREATE_TASK_TOOL.name || READ_TOOLS.some((tool) => tool.name === name),
+    name === CREATE_TASK_TOOL.name ||
+    READ_TOOLS.some((tool) => tool.name === name) ||
+    isTrackerTool(name),
   callTool: (name, args) =>
     name === CREATE_TASK_TOOL.name
       ? runCreateTask(grant, args)
-      : runReadTool(grant, name, args),
+      : isTrackerTool(name)
+        ? runTrackerTool(grant, name, args)
+        : runReadTool(grant, name, args),
 });
 
 const handleMcpPost = async (

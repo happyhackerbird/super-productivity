@@ -35,6 +35,8 @@ import {
 } from './sync/services/websocket-connection.service';
 import { testRoutes } from './test-routes';
 import { captureMcpRoutes, captureReadRoutes, captureRoutes } from './capture';
+import { trackerRoutes } from './tracker/tracker.routes';
+import { trackerPageRoutes } from './tracker/tracker-page.routes';
 
 // HTML escape to prevent XSS in generated HTML
 export const escapeHtml = (unsafe: string): string => {
@@ -538,6 +540,14 @@ export const createServer = (
         }
         await fastifyServer.register(captureRoutes, { prefix: '/api/capture' });
         await fastifyServer.register(captureReadRoutes, { prefix: '/api/capture' });
+        await fastifyServer.register(trackerRoutes, {
+          prefix: '/api/tracker',
+          publicUrl: fullConfig.publicUrl,
+        });
+        await fastifyServer.register(trackerPageRoutes, {
+          publicUrl: fullConfig.publicUrl,
+          pageDir: fullConfig.trackerPageDir,
+        });
       }
 
       // Test Routes (only in test mode)

@@ -43,6 +43,7 @@ model User {
   captureConnectCode          CaptureConnectCode?
   captureAuthorizations       CaptureAuth[]
   captureReadModel            CaptureReadModel?
+  trackerDocument             TrackerDocument?
   connectRequests             ConnectRequest[]
 
   @@index([verificationToken])
@@ -278,6 +279,20 @@ model CaptureReadModel {
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@map("capture_read_models")
+}
+
+/// Fork: the personal tracker, one JSON document per account (tasks and goals),
+/// read and written by the tracker page and by assistants over /mcp.
+model TrackerDocument {
+  userId    Int    @id @map("user_id")
+  /// Optimistic-concurrency counter; a save names the version it was based on.
+  version   Int
+  data      String
+  updatedAt BigInt @map("updated_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("tracker_documents")
 }
 
 // Browser sign-in of a new device; see src/connect/connect-request.store.ts.
