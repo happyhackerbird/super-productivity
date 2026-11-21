@@ -10,6 +10,8 @@ off after one hour); the override before that swap is
 which logs one line per `/mcp` request (`docker logs supersync 2>&1 | grep "MCP "`)
 and reads `TRACKER_NAME` for the tool descriptions; previous override
 `docker-compose.fork.yml.0ae7861756.bak`.
+Current catalog release: `supersync-fork:353f4f12d2`, deployed 2026-11-21 with
+the page from `/Users/lilly/code/career-tracker` commit `cd32240`.
 
 ## What it is
 
@@ -42,6 +44,11 @@ Pillars are `credibility`, `visibility`, and `access`; XP is an integer from
 definitions with unique IDs; `custom` and `wake` remain internal kinds.
 Catalog changes do not rewrite task instances, goals, wins, or previously earned XP.
 The page refreshes remote changes on focus or its normal refresh tick.
+Task instances snapshot their base XP and pillar when created; later catalog
+edits affect new choices, not existing task rewards. Wins retain their recorded
+XP and kind even when an imported or replaced catalog omits their definition.
+Pending caches from the old page merge against the fetched server catalog and
+history before saving, including when the cached and server versions match.
 
 The optional document field `activities` defaults to the existing catalog plus
 `learn` (**Watched and learned from content**, 15 XP) and `network`
@@ -61,7 +68,7 @@ Refresh the assistant connector's tool list to discover the three new tools.
 ```yaml
 services:
   supersync:
-    image: supersync-fork:91c41992b0
+    image: supersync-fork:353f4f12d2
     environment:
       TRACKER_PAGE_DIR: /app/tracker-page
       TRACKER_NAME: <what the user calls the tracker> # optional
@@ -89,7 +96,60 @@ revision being deployed. The current tool definitions return thirteen names.
   tools, `tracker_get` answers, the session cookie is `HttpOnly; SameSite=Strict;
 Secure`, and the cookie serves the page and its script.
 
-## Rollback
+## Catalog release verification (2026-11-21)
+
+- Local page smoke: `node dev/smoke.mjs` in the page checkout,
+  **59 passed, 0 failed, 0 skipped**. The three fresh-review findings
+  (legacy pending cache, clearing catalog/history, existing task rewards)
+  produced four failing assertions before the fixes and all passed afterwards.
+- Server: package `tsc` passed; the tracker, capture OAuth, capture read, and
+  capture route specs passed **127 tests in four files**, no skips.
+  The full server suite on this Mac also exposed 156 existing shell-test
+  failures (`health-alert-script` 97, `migrate-deploy-script` 59: missing
+  executable `timeout` / BSD `sed` incompatibility), reproduced against
+  the unchanged server snapshot. These shell suites are not catalog proof.
+  The repository's pre-push lint and app tests passed before publishing
+  `353f4f12d2`.
+- Built and loaded the `linux/amd64` image; the one-off migration reported
+  **No pending migrations to apply**; Compose reached **healthy**.
+- Stored both requested 15-XP definitions in the account's catalog.
+  Live MCP add/edit succeeded, leaving the seven task instances, goals,
+  and five wins unchanged during the catalog operations.
+- The public HTTPS `/mcp` returned thirteen tools and persisted an archive
+  through `tracker_delete_activity`. The authenticated page rendered both
+  requested labels at 15 XP in both pickers. A catalog-omitting public REST
+  write returned HTTP 400 `reload_required` without advancing the version.
+  An independent Chrome run confirmed the archived test option disappeared,
+  both requested options remained, and there were no page errors; its captured
+  UI showed the learning option and Log win button at 15 XP.
+- Removed the temporary test definition and revoked its capture grant
+  (subsequent `/mcp` request: HTTP 401). Final document version 27 retains
+  33 definitions; tasks, goals, and wins match the pre-deploy snapshot.
+- Backups: `/root/supersync/releases/catalog-20261121/` contains
+  `docker-compose.fork.yml.before`, `page-before.tar.gz`, and
+  `database-before.sql.gz`. The prior image `91c41992b0` is retained.
+- Two guarded attempts rolled back before any tracker document mutation:
+  `docker cp` restored the probe credential as root; the app user could not
+  read it, and `cap_drop: [ALL]` also prevents root from changing ownership
+  inside the container. Preflighted the root-owned probe client with
+  `docker exec -u 0`, then completed the cutover without changing the server
+  user, file modes, or capabilities. The MCP requests still ran through the
+  normally unprivileged server.
+
+To revert only this server release, keep the new page (it preserves catalog
+history and uses the existing tracker REST contract) and restore the prior image:
+
+```sh
+cd /root/supersync
+cp releases/catalog-20261121/docker-compose.fork.yml.before docker-compose.fork.yml
+docker compose -f docker-compose.yml -f docker-compose.fork.yml up -d supersync
+```
+
+The old server lacks the three catalog MCP tools. Do not restore the old page
+after logging new activity kinds: its sanitizer drops unknown kinds from wins.
+Export a tracker backup before any broader rollback.
+
+## Rollback original tracker installation
 
 ```sh
 cd /root/supersync
