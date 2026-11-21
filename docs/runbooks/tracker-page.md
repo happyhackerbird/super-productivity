@@ -11,7 +11,7 @@ which logs one line per `/mcp` request (`docker logs supersync 2>&1 | grep "MCP 
 and reads `TRACKER_NAME` for the tool descriptions; previous override
 `docker-compose.fork.yml.0ae7861756.bak`.
 Current catalog release: `supersync-fork:353f4f12d2`, deployed 2026-11-21 with
-the page from `/Users/lilly/code/career-tracker` commit `cd32240`.
+the page from `/Users/lilly/code/career-tracker` commit `ef0eac1`.
 
 ## What it is
 
@@ -32,6 +32,9 @@ the page from `/Users/lilly/code/career-tracker` commit `cd32240`.
 The general list is the activity catalog shared by **Log a win** and
 **Add from the list**. It is not today's tasks or the earlier/undated task
 instances. `tracker_get.activities` returns definitions, including archived ones.
+Catalog edits must preserve the existing picker categories: **Access ·
+Relationships**, **Access · Market discovery**, **Credibility · Build & prove**,
+and **Visibility · Share the work**.
 
 | Tool                      | Arguments                                             | Effect                                                          |
 | ------------------------- | ----------------------------------------------------- | --------------------------------------------------------------- |
@@ -148,6 +151,17 @@ docker compose -f docker-compose.yml -f docker-compose.fork.yml up -d supersync
 The old server lacks the three catalog MCP tools. Do not restore the old page
 after logging new activity kinds: its sanitizer drops unknown kinds from wins.
 Export a tracker backup before any broader rollback.
+
+## Category correction (2026-11-21)
+
+Page commit `ef0eac1` restores the original categories from
+`9912479:index.html` in both pickers. The two 15-XP activities and all thirteen
+MCP tools remain. The category regression failed before the correction; page
+smoke afterwards: **60 passed, 0 failed, 0 skipped**. Live authenticated UI
+verification confirmed both picker groupings and the two new XP values.
+Only `tracker.js` was replaced, without a container restart or server/API change.
+The previous script is retained at
+`/root/supersync/releases/categories-20261121/tracker.js.before`.
 
 ## Rollback original tracker installation
 
